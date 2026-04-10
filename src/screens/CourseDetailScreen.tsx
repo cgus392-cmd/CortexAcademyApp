@@ -26,9 +26,11 @@ import {
   Trash2,
   Edit3,
   Palette,
-  Clock
+  Clock,
+  Loader
 } from 'lucide-react-native';
 import { auth, db } from '../services/firebase';
+import { doc, setDoc } from '@react-native-firebase/firestore';
 import * as Haptics from 'expo-haptics';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -36,7 +38,7 @@ import { Spacing, Radius } from '../constants/theme';
 import { Course } from '../types';
 import CleanBackground from '../components/CleanBackground';
 import { useTheme } from '../context/ThemeContext';
-import { useData } from '../context/DataContext';
+import { useData, resolveColor } from '../context/DataContext';
 import { MatteCard, MatteUnderlay, MatteIconButton } from '../components/design-system/CortexMatte';
 import * as AcademicEngine from '../services/AcademicEngine';
 
@@ -115,10 +117,11 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
   const { 
     courses, 
     updateCourse, 
+    deleteCourse: contextDeleteCourse,
     scheduleBlocks, 
-    addScheduleBlock, 
     deleteScheduleBlock, 
-    batchUpdateScheduleBySubject 
+    batchUpdateScheduleBySubject,
+    batchUpdateCourseAndSchedule
   } = useData();
   const styles = getStyles(theme);
 
@@ -139,6 +142,22 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
 
   const [editingSchedule, setEditingSchedule] = useState<any[]>([]);
   const [newBlock, setNewBlock] = useState({ day: 'Lunes', startTime: '08:00', endTime: '10:00' });
+
+  // CRITICAL SAFETY EXIT: If course is not found (sync delay), don't crash
+  if (!course) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <Loader size={32} color={theme.primary} />
+        <Text style={{ marginTop: 20, color: theme.textSecondary, fontWeight: '600' }}>Cargando materia...</Text>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()}
+          style={{ marginTop: 30, padding: 12, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12 }}
+        >
+          <Text style={{ color: theme.text }}>Regresar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   useEffect(() => {
     if (course) {
@@ -265,50 +284,47 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
 
   const saveCourseDetails = async () => {
     if (!editingCourse || !course) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
-    const nameChanged = editingCourse.name !== course.name;
-    const colorChanged = editingCourse.color !== course.color;
+    try {
+        // Prepare the updated course object
+        const updatedCourse = {
+            ...course,
+            name: editingCourse.name || 'Sin Nombre',
+            code: editingCourse.code || 'S/N',
+            professor: editingCourse.professor || 'Sin Profesor',
+            credits: parseInt(editingCourse.credits) || 0,
+            color: editingCourse.color || theme.primary
+        };
 
-    // 1. Batch update existing blocks if name or color changed
-    if (nameChanged || colorChanged) {
-        await batchUpdateScheduleBySubject(course.name, editingCourse.name, editingCourse.color);
-    }
-
-    // 2. Handle schedule mutations (Additions/Deletions)
-    // For simplicity, we compare local editingSchedule with the ones already in DataContext
-    const currentCourseBlocks = scheduleBlocks.filter(b => b.subject === course.name);
-    
-    // Find blocks to delete
-    for (const b of currentCourseBlocks) {
-        if (!editingSchedule.find(eb => eb.id === b.id)) {
-            await deleteScheduleBlock(b.id);
-        }
-    }
-
-    // Find blocks to add (those without string IDs or new ones)
-    for (const eb of editingSchedule) {
-        if (typeof eb.id === 'number') { // Temporary numeric ID
-            await addScheduleBlock({
+        // Prepare the new schedule blocks list
+        const finalBlocks = editingSchedule.map(eb => {
+            if (typeof eb.id === 'number') {
+                // It's a new block, give it a proper string ID
+                return {
+                    ...eb,
+                    id: `block_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                    subject: updatedCourse.name,
+                    color: updatedCourse.color
+                };
+            }
+            // It's an existing block, update its subject name and color just in case they changed
+            return {
                 ...eb,
-                id: `block_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                subject: editingCourse.name,
-                color: editingCourse.color
-            });
-        }
-    }
+                subject: updatedCourse.name,
+                color: updatedCourse.color
+            };
+        });
 
-    const updatedCourse = {
-        ...course,
-        name: editingCourse.name || 'Sin Nombre',
-        code: editingCourse.code || 'S/N',
-        professor: editingCourse.professor || 'Sin Profesor',
-        credits: parseInt(editingCourse.credits) || 0,
-        color: editingCourse.color || theme.primary
-    };
-    
-    updateCourse(updatedCourse);
-    setCourseModalVisible(false);
+        // Atomic update for both course and schedule
+        await batchUpdateCourseAndSchedule(updatedCourse, finalBlocks);
+        
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setCourseModalVisible(false);
+    } catch (error) {
+        console.error("Error saving course details:", error);
+        Alert.alert("Error de Conexión", "No se pudieron guardar los cambios. Por favor, verifica tu conexión e intenta de nuevo.");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
   };
 
   const { userProfile } = useData();
@@ -350,7 +366,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
   return (
     <CleanBackground>
       <View style={[styles.header, { paddingTop: insets.top + 15, paddingBottom: 15 }]}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: course.color }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: resolveColor(course.color) }]} />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.2)']}
           style={StyleSheet.absoluteFill}
@@ -429,12 +445,12 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
 
             <View style={{ alignItems: 'center' }}>
                 <Text style={[styles.averageLabel, { color: theme.text, opacity: 0.6, letterSpacing: 1.5, fontSize: 9, marginBottom: 5 }]}>
-                PROMEDIO PROPORCIONAL (RP)
+                PROMEDIO PARCIAL (RP)  •  PROMEDIO GLOBAL: {AcademicEngine.calculateCourseGlobalScore(course).toFixed(2)}
                 </Text>
                 <Text
                 style={[
                     styles.averageValue,
-                    { color: course.color, textShadowColor: 'rgba(255,255,255,0.4)', textShadowRadius: 10 },
+                    { color: resolveColor(course.color), textShadowColor: 'rgba(255,255,255,0.4)', textShadowRadius: 10 },
                 ]}
                 >
                 {AcademicEngine.calculateCourseGPA(course.cuts).toFixed(2)}
@@ -451,7 +467,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                     from={{ width: '0%' }}
                     animate={{ width: `${course.progress || 0}%` }}
                     transition={{ type: 'spring', delay: 500, damping: 20 }}
-                    style={[styles.progressFill, { backgroundColor: course.color, minWidth: (course.progress || 0) > 0 ? 4 : 0 }]}
+                    style={[styles.progressFill, { backgroundColor: resolveColor(course.color), minWidth: (course.progress || 0) > 0 ? 4 : 0 }]}
                 />
                 </View>
                 <View style={{ gap: 4 }}>
@@ -472,7 +488,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
            transition={{ delay: 350 }}
         >
             <MatteCard radius={Radius.lg} style={styles.oracleCard}>
-                <View style={[styles.oracleIcon, { backgroundColor: `${course.color}15` }]}>
+                <View style={[styles.oracleIcon, { backgroundColor: `${resolveColor(course.color)}15` }]}>
                     <MotiView
                         animate={{ 
                             scale: [1, 1.2, 1],
@@ -481,11 +497,11 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                         }}
                         transition={{ duration: 2500, loop: true, type: 'timing' }}
                     >
-                        <Brain size={18} color={course.color} />
+                        <Brain size={18} color={resolveColor(course.color)} />
                     </MotiView>
                 </View>
                 <View style={{ flex: 1 }}>
-                    <Text style={[styles.oracleTitle, { color: course.color }]}>ORÁCULO ACADÉMICO</Text>
+                    <Text style={[styles.oracleTitle, { color: resolveColor(course.color) }]}>ORÁCULO ACADÉMICO</Text>
                     {(() => {
                         const target = userProfile?.targetGrade || 4.5;
                         const remainingWeight = 100 - (course.cuts.reduce((sum: number, c: any) => sum + (parseFloat(c.grade) > 0 ? c.weight : 0), 0));
@@ -552,16 +568,33 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                }}
                activeOpacity={0.7}
             >
-              <View style={[styles.cutWeight, { backgroundColor: `${course.color}15` }]}>
-                <Text style={[styles.cutWeightText, { color: course.color }]}>{cut.weight}%</Text>
+              <View style={[styles.cutWeight, { backgroundColor: `${resolveColor(course.color)}15` }]}>
+                <Text style={[styles.cutWeightText, { color: resolveColor(course.color) }]}>{cut.weight}%</Text>
               </View>
               <View style={styles.cutInfo}>
                 <Text style={[styles.cutName, { color: theme.text }]}>{cut.name}</Text>
                 <Text style={[styles.cutSubLabel, { color: theme.textMuted }]}>Peso en nota final</Text>
               </View>
               <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
-                <Text style={[styles.cutGrade, { color: course.color }]}>{cut.grade}</Text>
+                <Text style={[styles.cutGrade, { color: resolveColor(course.color) }]}>{cut.grade}</Text>
               </View>
+
+              <TouchableOpacity 
+                style={{ width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', marginRight: 5 }}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setEditingCut({ 
+                    id: cut.id, 
+                    name: cut.name, 
+                    weight: String(cut.weight),
+                    method: cut.method || 'detailed',
+                    grade: cut.grade
+                  });
+                  setCutModalVisible(true);
+                }}
+              >
+                <Edit3 size={14} color={resolveColor(course.color)} />
+              </TouchableOpacity>
               {(cut.method === 'detailed' && (cut.activities?.length ?? 0) > 0) &&
                 (expandedCuts.includes(cut.id) ? (
                   <ChevronUp size={16} color={theme.textMuted} />
@@ -583,10 +616,13 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                        setGradeModalVisible(true);
                     }}
                   >
-                    <View style={[styles.actDot, { backgroundColor: course.color }]} />
+                    <View style={[styles.actDot, { backgroundColor: resolveColor(course.color) }]} />
                     <Text style={[styles.actName, { color: theme.textSecondary }]}>{act.name}</Text>
                     <Text style={[styles.actWeight, { color: theme.textMuted }]}>{act.weight}%</Text>
-                    <Text style={[styles.actGrade, { color: course.color }]}>{parseFloat(act.grade).toFixed(1)}</Text>
+                    <Text style={[styles.actGrade, { color: resolveColor(course.color) }]}>{parseFloat(act.grade).toFixed(1)}</Text>
+                    <View style={{ marginLeft: 8, opacity: 0.4 }}>
+                        <Edit3 size={10} color={theme.textMuted} />
+                    </View>
                   </TouchableOpacity>
                 ))}
                 
@@ -598,7 +634,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                        setGradeModalVisible(true);
                     }}
                 >
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: course.color }}>+ Agregar Nota</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: resolveColor(course.color) }}>+ Agregar Nota</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -613,7 +649,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
             setCutModalVisible(true);
           }}
         >
-          <Text style={{ fontWeight: '800', fontSize: 14, color: course.color }}>+ Agregar Nuevo Corte</Text>
+          <Text style={{ fontWeight: '800', fontSize: 14, color: resolveColor(course.color) }}>+ Agregar Nuevo Corte</Text>
         </TouchableOpacity>
 
         <MotiView
@@ -623,8 +659,8 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
           style={styles.bigDataCard}
         >
           <MatteUnderlay radius={Radius.lg} />
-          <View style={[styles.bigDataIcon, { backgroundColor: `${course.color}20` }]}>
-            <Database size={20} color={course.color} />
+          <View style={[styles.bigDataIcon, { backgroundColor: `${resolveColor(course.color)}20` }]}>
+            <Database size={20} color={resolveColor(course.color)} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.bigDataTitle, { color: theme.text }]}>Big Data Academico</Text>
@@ -642,9 +678,9 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
             size={36}
             radius={18}
             style={styles.moreInfoBtn}
-            tint={`${course.color}15`}
+            tint={`${resolveColor(course.color)}15`}
           >
-            <Info size={16} color={course.color} />
+            <Info size={16} color={resolveColor(course.color)} />
           </MatteIconButton>
         </MotiView>
 
@@ -652,8 +688,8 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
         {(course.resources || []).map((res: any) => (
           <View key={res.id} style={styles.resourceRow}>
             <MatteUnderlay radius={Radius.md} />
-            <View style={[styles.resourceIcon, { backgroundColor: `${course.color}20` }]}>
-              <Link size={14} color={course.color} />
+            <View style={[styles.resourceIcon, { backgroundColor: `${resolveColor(course.color)}20` }]}>
+              <Link size={14} color={resolveColor(course.color)} />
             </View>
             <Text style={[styles.resourceTitle, { color: theme.text }]}>{res.title}</Text>
           </View>
@@ -664,7 +700,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Horario</Text>
             <View style={styles.scheduleCard}>
               <MatteUnderlay radius={Radius.md} />
-              <Calendar size={16} color={course.color} />
+              <Calendar size={16} color={resolveColor(course.color)} />
               <Text style={[styles.scheduleText, { color: theme.textSecondary }]}>
                 {course.schedule.day} - {course.schedule.time}
               </Text>
@@ -688,9 +724,12 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                       style: 'destructive', 
                       onPress: async () => {
                          if (!auth.currentUser) return;
-                         const newCourses = courses.filter((c: any) => c.id !== course.id);
-                         await db.collection('users').doc(auth.currentUser.uid).set({ courses: newCourses }, { merge: true });
-                         navigation.goBack();
+                         await contextDeleteCourse(course.id);
+                         if (navigation.canGoBack()) {
+                            navigation.goBack();
+                         } else {
+                            navigation.replace('MainTabs', { screen: 'Academic' });
+                         }
                       }
                     }
                   ]
@@ -745,10 +784,11 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
       {/* Grade CRUD Modal */}
       <Modal visible={gradeModalVisible} transparent animationType="fade">
         <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={styles.modalOverlay}
+          keyboardVerticalOffset={0}
         >
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface, maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>
                 {editingGrade?.actId ? 'Editar Calificación' : 'Nueva Calificación'}
@@ -758,7 +798,8 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
               </TouchableOpacity>
             </View>
 
-            <View style={{ gap: 12, marginTop: 10 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+              <View style={{ gap: 12, marginTop: 10 }}>
               <Text style={{ fontSize: 13, fontWeight: '800', color: theme.textSecondary, textTransform: 'uppercase' }}>Nombre de la Actividad</Text>
               <TextInput
                 style={[styles.inputSarah, { backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
@@ -792,9 +833,10 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                   />
                 </View>
               </View>
-            </View>
+              </View>
+            </ScrollView>
 
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 10 }}>
               {editingGrade?.actId && (
                 <TouchableOpacity 
                    style={[styles.actionBtnSarah, { backgroundColor: theme.error + '20', flex: 0.5 }]}
@@ -804,7 +846,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                 </TouchableOpacity>
               )}
               <TouchableOpacity 
-                 style={[styles.actionBtnSarah, { backgroundColor: course.color, flex: 1 }]}
+                 style={[styles.actionBtnSarah, { backgroundColor: resolveColor(course.color), flex: 1 }]}
                  onPress={saveGrade}
               >
                 <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 15 }}>Guardar Nota</Text>
@@ -817,10 +859,11 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
       {/* Cut CRUD Modal */}
       <Modal visible={cutModalVisible} transparent animationType="fade">
         <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={styles.modalOverlay}
+          keyboardVerticalOffset={0}
         >
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface, maxHeight: '95%' }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>
                 {editingCut?.id ? 'Editar Corte' : 'Nuevo Corte'}
@@ -830,7 +873,8 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
               </TouchableOpacity>
             </View>
 
-            <View style={{ gap: 12, marginTop: 10 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+              <View style={{ gap: 12, marginTop: 10 }}>
               <Text style={{ fontSize: 13, fontWeight: '800', color: theme.textSecondary, textTransform: 'uppercase' }}>Nombre del Corte</Text>
               <TextInput
                 style={[styles.inputSarah, { backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
@@ -863,10 +907,10 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                             flex: 1, 
                             paddingVertical: 12, 
                             borderRadius: 12, 
-                            backgroundColor: (editingCut?.method || 'basic') === m ? course.color : theme.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                            backgroundColor: (editingCut?.method || 'basic') === m ? resolveColor(course.color) : theme.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
                             alignItems: 'center',
                             borderWidth: 1.5,
-                            borderColor: (editingCut?.method || 'basic') === m ? course.color : 'transparent'
+                            borderColor: (editingCut?.method || 'basic') === m ? resolveColor(course.color) : 'transparent'
                         }}
                     >
                         <Text style={{ fontSize: 13, fontWeight: '900', color: (editingCut?.method || 'basic') === m ? '#FFF' : theme.textSecondary }}>
@@ -894,9 +938,10 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                     />
                   </View>
               )}
-            </View>
+              </View>
+            </ScrollView>
 
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 32 }}>
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 10 }}>
               {editingCut?.id && (
                 <TouchableOpacity 
                    style={[styles.actionBtnSarah, { backgroundColor: theme.error + '20', flex: 0.5 }]}
@@ -906,7 +951,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                 </TouchableOpacity>
               )}
               <TouchableOpacity 
-                 style={[styles.actionBtnSarah, { backgroundColor: course.color, flex: 1 }]}
+                 style={[styles.actionBtnSarah, { backgroundColor: resolveColor(course.color), flex: 1 }]}
                  onPress={saveCut}
               >
                 <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 15 }}>Guardar Corte</Text>
@@ -919,8 +964,9 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
       {/* Course Header Edit Modal */}
       <Modal visible={courseModalVisible} transparent animationType="fade">
         <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={styles.modalOverlay}
+          keyboardVerticalOffset={0}
         >
           <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
@@ -979,7 +1025,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                 {/* --- SCHEDULE MANAGEMENT SECTION --- */}
                 <View style={{ marginTop: 20, padding: 16, backgroundColor: theme.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: 16 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <Clock size={16} color={course.color} />
+                        <Clock size={16} color={resolveColor(course.color)} />
                         <Text style={{ fontSize: 13, fontWeight: '900', color: theme.text, letterSpacing: 1 }}>GESTIÓN DE HORARIO</Text>
                     </View>
 
@@ -994,9 +1040,9 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                                         paddingHorizontal: 10, 
                                         paddingVertical: 6, 
                                         borderRadius: 8, 
-                                        backgroundColor: newBlock.day === d ? course.color : 'transparent',
+                                        backgroundColor: newBlock.day === d ? resolveColor(course.color) : 'transparent',
                                         borderWidth: 1,
-                                        borderColor: newBlock.day === d ? course.color : theme.border
+                                        borderColor: newBlock.day === d ? resolveColor(course.color) : theme.border
                                     }}
                                 >
                                     <Text style={{ fontSize: 11, fontWeight: '800', color: newBlock.day === d ? '#FFF' : theme.textSecondary }}>{d.substring(0,3)}</Text>
@@ -1023,7 +1069,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
                                     setEditingSchedule(prev => [...prev, { ...newBlock, id: Date.now() }]);
                                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                 }}
-                                style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: course.color, alignItems: 'center', justifyContent: 'center' }}
+                                style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: resolveColor(course.color), alignItems: 'center', justifyContent: 'center' }}
                             >
                                 <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 20 }}>+</Text>
                             </TouchableOpacity>
@@ -1047,7 +1093,7 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
             </ScrollView>
 
             <TouchableOpacity 
-               style={[styles.actionBtnSarah, { backgroundColor: course.color, marginTop: 24 }]}
+               style={[styles.actionBtnSarah, { backgroundColor: resolveColor(course.color), marginTop: 24 }]}
                onPress={saveCourseDetails}
             >
               <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 15 }}>Guardar Cambios</Text>

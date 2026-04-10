@@ -42,10 +42,11 @@ import { Colors, Spacing, Radius, Shadows } from '../constants/theme';
 import { ScheduleBlock } from '../types';
 import CleanBackground from '../components/CleanBackground';
 import { useTheme } from '../context/ThemeContext';
-import { useData } from '../context/DataContext';
+import { useData, resolveColor } from '../context/DataContext';
 import { generateContextAwareText } from '../services/gemini';
 import FocusTransition from '../components/FocusTransition';
 import { useScrollToHideTabBar } from '../hooks/useScrollToHideTabBar';
+import { NotificationService } from '../services/NotificationService';
 import { MatteCard, MatteUnderlay, MatteIconButton, MatteBanner } from '../components/design-system/CortexMatte';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -97,7 +98,8 @@ export default function CronosScreen() {
     priority: 'medium' as 'high' | 'medium' | 'low',
     date: new Date().toISOString().split('T')[0],
     courseId: 0 as number | undefined,
-    estimatedTime: '30m'
+    estimatedTime: '30m',
+    reminderOffset: 86400000 // 1 día por defecto
   });
 
   const fetchFocusTip = async () => {
@@ -163,15 +165,30 @@ export default function CronosScreen() {
         status: 'todo'
     };
     await addTask(taskObj);
-    setIsModalVisible(false);
     setNewTask({
         text: '',
         description: '',
         priority: 'medium',
         date: new Date().toISOString().split('T')[0],
         courseId: 0,
-        estimatedTime: '30m'
+        estimatedTime: '30m',
+        reminderOffset: 86400000
     });
+    setIsModalVisible(false);
+    
+    // 🔔 Programar Notificación
+    if (taskObj.date) {
+        // Normalizar a final del día si solo viene la fecha AAAA-MM-DD
+        const finalDateStr = taskObj.date.includes('T') ? taskObj.date : `${taskObj.date}T23:59:59`;
+        
+        NotificationService.scheduleTaskReminder(
+            taskObj.id.toString(), 
+            taskObj.text, 
+            finalDateStr, 
+            taskObj.reminderOffset
+        );
+    }
+    
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -180,6 +197,8 @@ export default function CronosScreen() {
         { text: 'Cancelar', style: 'cancel' },
         { text: 'Eliminar', style: 'destructive', onPress: async () => {
             await deleteTask(id);
+            // 🔕 Cancelar Notificación
+            NotificationService.cancelNotification(`task_${id}`);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         }}
     ]);
@@ -340,7 +359,13 @@ export default function CronosScreen() {
                 const order = ['todo', 'in_progress', 'done'];
                 const curr = task.status || (task.done ? 'done' : 'todo');
                 const next = order[Math.min(order.indexOf(curr) + 1, 2)];
-                updateTask({ ...task, status: next, done: next === 'done' });
+                const isDone = next === 'done';
+                
+                updateTask({ ...task, status: next, done: isDone });
+                
+                if (isDone) {
+                    NotificationService.cancelNotification(`task_${task.id}`);
+                }
               };
 
               return (
@@ -429,7 +454,7 @@ export default function CronosScreen() {
                     return Object.entries(groupedTasks).map(([cat, items], idx) => (
                         <View key={cat} style={{ marginBottom: 20 }}>
                             <View style={styles.categoryHeader}>
-                                <View style={[styles.catIndicator, { backgroundColor: courses.find(c => c.name === cat)?.color || theme.primary }]} />
+                                <View style={[styles.catIndicator, { backgroundColor: resolveColor(courses.find(c => c.name === cat)?.color) || theme.primary }]} />
                                 <Text style={styles.categoryTitle}>{cat.toUpperCase()}</Text>
                                 <View style={styles.catBadge}>
                                     <Text style={styles.catBadgeText}>{items.length}</Text>
@@ -445,7 +470,20 @@ export default function CronosScreen() {
                                       style={[styles.checkbox, task.done && styles.checkboxDone]}
                                       onPress={() => {
                                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                        updateTask({ ...task, done: !task.done, status: !task.done ? 'done' : 'todo' });
+                                        const newDone = !task.done;
+                                        updateTask({ ...task, done: newDone, status: newDone ? 'done' : 'todo' });
+                                        
+                                        if (newDone) {
+                                            NotificationService.cancelNotification(`task_${task.id}`);
+                                        } else if (task.date) {
+                                            // Re-programar si se desmarca
+                                            NotificationService.scheduleTaskReminder(
+                                                task.id.toString(),
+                                                task.text,
+                                                task.date,
+                                                task.reminderOffset || 86400000
+                                            );
+                                        }
                                       }}
                                     >
                                         {task.done && <Zap size={10} color="#fff" />}
@@ -741,9 +779,9 @@ export default function CronosScreen() {
                                     <TouchableOpacity 
                                         key={c.id} 
                                         onPress={() => setNewTask({...newTask, courseId: c.id})}
-                                        style={[styles.coursePill, newTask.courseId === c.id && { backgroundColor: c.color }]}
+                                        style={[styles.coursePill, newTask.courseId === c.id && { backgroundColor: resolveColor(c.color) }]}
                                     >
-                                        <BookOpen size={14} color={newTask.courseId === c.id ? '#FFF' : c.color} />
+                                        <BookOpen size={14} color={newTask.courseId === c.id ? '#FFF' : resolveColor(c.color)} />
                                         <Text style={[styles.coursePillText, newTask.courseId === c.id && { color: '#FFF' }]}>{c.name}</Text>
                                     </TouchableOpacity>
                                 ))}
@@ -768,6 +806,31 @@ export default function CronosScreen() {
                                     onChangeText={(t) => setNewTask({...newTask, estimatedTime: t})}
                                     placeholder="30m"
                                 />
+                            </View>
+                        </View>
+
+                        <View style={styles.formGroup}>
+                            <Text style={styles.inputLabel}>Recordatorio (Anticipación)</Text>
+                            <View style={styles.toggleRow}>
+                                {[
+                                    { label: '12h', val: 43200000 },
+                                    { label: '1d', val: 86400000 },
+                                    { label: '2d', val: 172800000 },
+                                    { label: '3d', val: 259200000 }
+                                ].map(opt => (
+                                    <TouchableOpacity 
+                                        key={opt.label} 
+                                        onPress={() => {
+                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                            setNewTask({...newTask, reminderOffset: opt.val});
+                                        }}
+                                        style={[styles.miniToggle, newTask.reminderOffset === opt.val && styles.miniToggleActive]}
+                                    >
+                                        <Text style={[styles.miniToggleText, newTask.reminderOffset === opt.val && styles.miniToggleTextActive]}>
+                                            {opt.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
                         </View>
 

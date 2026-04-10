@@ -24,7 +24,7 @@ import * as Haptics from 'expo-haptics';
 import { MotiView } from 'moti';
 import { Spacing, Radius, Shadows } from '../constants/theme';
 import CleanBackground from '../components/CleanBackground';
-import { useData } from '../context/DataContext';
+import { useData, resolveColor } from '../context/DataContext';
 import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../context/ThemeContext';
 import { generateContextAwareText } from '../services/gemini';
@@ -32,6 +32,7 @@ import * as AcademicEngine from '../services/AcademicEngine';
 import { MatteCard } from '../components/design-system/CortexMatte';
 import CortySpeechBubble from '../components/CortySpeechBubble';
 import { auth, db } from '../services/firebase';
+import { doc, setDoc } from '@react-native-firebase/firestore';
 
 const { width } = Dimensions.get('window');
 
@@ -40,7 +41,7 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
   const { theme } = useTheme();
   const { isTablet, isLaptop } = useResponsive();
   const isWide = isTablet || isLaptop;
-  const { courses, userProfile } = useData();
+  const { courses, userProfile, addCourse } = useData();
   const styles = getStyles(theme, isWide);
 
   const [aiInsight, setAiInsight] = useState('Toca el icono para obtener un insight de Cortex IA.');
@@ -102,7 +103,7 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
       });
 
       if (needsUpdate && auth.currentUser) {
-        db.collection('users').doc(auth.currentUser.uid).set({ courses: updatedCourses }, { merge: true });
+        setDoc(doc(db, 'users', auth.currentUser.uid), { courses: updatedCourses }, { merge: true });
       }
     }
   }, [courses]); // Cambiar courses.length por courses para detectar cambios internos
@@ -158,9 +159,9 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
     if (!auth.currentUser) return;
     const prefs = userProfile?.preferences || {};
     const defaultCuts = [
-      { id: Date.now() + 1, name: 'Corte 1', weight: prefs.cut1Weight || 30, grade: '0.0', activities: [] },
-      { id: Date.now() + 2, name: 'Corte 2', weight: prefs.cut2Weight || 30, grade: '0.0', activities: [] },
-      { id: Date.now() + 3, name: 'Corte 3', weight: prefs.cut3Weight || 40, grade: '0.0', activities: [] },
+      { id: Date.now() + 1, name: 'Corte 1', weight: prefs.cut1Weight || 30, grade: '0.0', activities: [], method: 'basic' },
+      { id: Date.now() + 2, name: 'Corte 2', weight: prefs.cut2Weight || 30, grade: '0.0', activities: [], method: 'basic' },
+      { id: Date.now() + 3, name: 'Corte 3', weight: prefs.cut3Weight || 40, grade: '0.0', activities: [], method: 'basic' },
     ];
     
     const newCourse = {
@@ -178,9 +179,9 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
       resources: [],
       schedule: { day: 'Lunes', time: '08:00 - 10:00' }
     };
-    const newCourses = [...courses, newCourse];
+    
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await db.collection('users').doc(auth.currentUser.uid).set({ courses: newCourses }, { merge: true });
+    await addCourse(newCourse);
     // Navigate straight to detail so they can edit the name and cuts
     navigation.navigate('CourseDetail', { courseId: newCourse.id });
   };
@@ -193,7 +194,11 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
         style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
         <TouchableOpacity 
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+                navigation.goBack();
+            }
+          }}
           style={styles.backBtn}
         >
           <ArrowLeft size={24} color={theme.text} />
@@ -217,64 +222,70 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
             transition={{ type: 'spring', delay: 200 }}
             style={styles.gpaCard}
           >
-          <View style={[StyleSheet.absoluteFill, styles.glassBase, { borderRadius: 35 }]} />
-          <View style={[StyleSheet.absoluteFill, { borderRadius: 35, borderWidth: 2, borderColor: theme.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.8)' }]} />
-          <LinearGradient
-            colors={[status.color + '40', 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[StyleSheet.absoluteFill, { borderRadius: 35 }]}
-          />
-          {/* Status Glow Aura */}
-          <MotiView 
-            animate={{ 
-              opacity: status.label === 'SOBRESALIENTE' ? [0.05, 0.15, 0.05] : 0,
-              scale: status.label === 'SOBRESALIENTE' ? [1, 1.02, 1] : 1
-            }}
-            transition={{ duration: 4000, loop: true, type: 'timing' }}
-            style={[StyleSheet.absoluteFill, { backgroundColor: status.color, borderRadius: 35, opacity: 0.1 }]}
-          />
+            <View style={[StyleSheet.absoluteFill, styles.glassBase, { borderRadius: 35 }]} />
+            <View style={[StyleSheet.absoluteFill, { borderRadius: 35, borderWidth: 2, borderColor: theme.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.8)' }]} />
+            <LinearGradient
+              colors={[status.color + '40', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[StyleSheet.absoluteFill, { borderRadius: 35 }]}
+            />
+            {/* Status Glow Aura */}
+            <MotiView 
+              animate={{ 
+                opacity: status.label === 'SOBRESALIENTE' ? [0.05, 0.15, 0.05] : 0,
+                scale: status.label === 'SOBRESALIENTE' ? [1, 1.02, 1] : 1
+              }}
+              transition={{ duration: 4000, loop: true, type: 'timing' }}
+              style={[StyleSheet.absoluteFill, { backgroundColor: status.color, borderRadius: 35, opacity: 0.1 }]}
+            />
 
-          <View style={styles.gpaInfo}>
-            <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.gpaLabel}>PROMEDIO (P.A.P.A)</Text>
-                <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
-                    <Text style={[styles.statusText, { color: status.color }]}>{status.icon} {status.label}</Text>
+            <View style={styles.gpaInfo}>
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.gpaLabel}>PROMEDIO PARCIAL</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
+                      <Text style={[styles.statusText, { color: status.color }]}>{status.icon} {status.label}</Text>
+                  </View>
                 </View>
+                <Text style={styles.gpaValue}>{realGPA.toFixed(2)}</Text>
               </View>
-              <Text style={styles.gpaValue}>{avgGrade}</Text>
+              <View style={styles.creditsBadge}>
+                <GraduationCap size={16} color={theme.isDark ? theme.primary : theme.textContrast} />
+                <Text style={styles.creditsText}>{totalCredits} Créditos</Text>
+              </View>
             </View>
-            <View style={styles.creditsBadge}>
-              <GraduationCap size={16} color={theme.isDark ? theme.primary : theme.textContrast} />
-              <Text style={styles.creditsText}>{totalCredits} Créditos</Text>
-            </View>
-          </View>
 
-          <View style={styles.gpaFooter}>
-            <View style={styles.progressTrack}>
-               <View style={[styles.progressIndicator, { width: `${(avgGradeNum / (userProfile?.maxGrade || 5)) * 100}%`, backgroundColor: status.color }]} />
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.targetText}>Progreso Semestral: {semesterProgress}%</Text>
-                
-                <TouchableOpacity 
-                    onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        setIsSandboxMode(!isSandboxMode);
-                    }}
-                    style={[styles.sandboxToggle, isSandboxMode && { backgroundColor: theme.primary + '20', borderColor: theme.primary }]}
-                >
-                    <Zap size={12} color={isSandboxMode ? theme.primary : theme.textMuted} />
-                    <Text style={[styles.sandboxText, { color: isSandboxMode ? theme.primary : theme.textMuted }]}>
-                        {isSandboxMode ? 'MODO SIMULACIÓN' : 'SIMULAR P.A.P.A'}
-                    </Text>
-                </TouchableOpacity>
+            <View style={styles.gpaFooter}>
+              <View style={styles.progressTrack}>
+                 <View style={[styles.progressIndicator, { width: `${(avgGradeNum / (userProfile?.maxGrade || 5)) * 100}%`, backgroundColor: status.color }]} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.targetText}>PROMEDIO GLOBAL: {avgGrade}</Text>
+                  
+                  <TouchableOpacity 
+                      onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          setIsSandboxMode(!isSandboxMode);
+                      }}
+                      style={[styles.sandboxToggle, isSandboxMode && { backgroundColor: theme.primary + '20', borderColor: theme.primary }]}
+                  >
+                      <Zap size={12} color={isSandboxMode ? theme.primary : theme.textMuted} />
+                      <Text style={[styles.sandboxText, { color: isSandboxMode ? theme.primary : theme.textMuted }]}>
+                          {isSandboxMode ? 'MODO SIMULACIÓN' : 'SIMULAR PROMEDIO'}
+                      </Text>
+                  </TouchableOpacity>
 
-                <Text style={styles.targetText}>Meta: {target}</Text>
+                  <Text style={styles.targetText}>Meta: {target}</Text>
+              </View>
             </View>
-          </View>
-        </MotiView>
+          </MotiView>
+          {showCortyHint && (
+            <CortySpeechBubble 
+               visible={showCortyHint} 
+               message="¡Hola! Tu PROMEDIO PARCIAL es tu nota real ponderada actual, mientras que tu PROMEDIO GLOBAL es cuánto llevas acumulado del 5.0 total del semestre. 🧠📚" 
+            />
+          )}
         </View>
 
         {/* --- AI INSIGHT SECTION --- */}
@@ -300,14 +311,6 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
           </View>
         </TouchableOpacity>
 
-        {showCortyHint && (
-          <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} style={styles.maxWidthWrapper}>
-            <CortySpeechBubble 
-               visible={showCortyHint} 
-               message="¡Hola! Tu PROMEDIO es tu nota real ponderada, mientras que tus PUNTOS GANADOS es cuánto llevas acumulado del 5.0 total del semestre. 🧠📚" 
-            />
-          </MotiView>
-        )}
 
         {/* --- SEMESTERS NAVIGATION --- */}
         <View style={styles.maxWidthWrapper}>
@@ -364,7 +367,7 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
                 style={[styles.courseCard, isSandboxMode && { paddingBottom: 20 }]}
                 radius={25}
             >
-                <View style={[styles.courseColorBar, { backgroundColor: course.color }]} />
+                <View style={[styles.courseColorBar, { backgroundColor: resolveColor(course.color) }]} />
 
                 {!isSandboxMode ? (
                   // --- CLASSIC DESIGN (MODO CONSULTA) ---
@@ -374,7 +377,7 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
                         <Text style={styles.courseCredits}>{course.professor || 'Por asignar'}</Text>
                       </View>
                       <View style={styles.avgWrapper}>
-                        <Text style={[styles.courseAvg, { color: course.color }]}>
+                        <Text style={[styles.courseAvg, { color: resolveColor(course.color) }]}>
                           {AcademicEngine.calculateAccumulatedScore(course.cuts).toFixed(2)}
                         </Text>
                         <ChevronRight size={16} color={theme.textMuted} />
@@ -390,7 +393,7 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
                                    <Text style={styles.courseCredits}>{course.credits} Créditos</Text>
                                    <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted }} />
                                    <Text style={[styles.accumulatedLabel, { color: theme.primary, fontWeight: '700' }]}>
-                                      PUNTOS GANADOS: {AcademicEngine.calculateAccumulatedScore(course.cuts).toFixed(2)} / 5.0
+                                      PROMEDIO GLOBAL: {AcademicEngine.calculateAccumulatedScore(course.cuts).toFixed(2)} / 5.0
                                    </Text>
                                    <Text style={[styles.courseCredits, { color: theme.primary, fontWeight: '800' }]}>
                                        Impacto: {((course.credits / (totalCredits || 1)) * 100).toFixed(1)}%
@@ -457,7 +460,7 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
                       </View>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                           <View style={styles.lastCutInfo}>
-                              <Text style={styles.progLabel}>PROGRESO: {course.progress}%</Text>
+                              <Text style={styles.progLabel}>PROGRESO: {course.progress}%  •  PROMEDIO GLOBAL: {AcademicEngine.calculateCourseGlobalScore(course).toFixed(2)}</Text>
                               {(() => {
                                 const lastGratdedCut = [...course.cuts].reverse().find(c => parseFloat(c.grade) > 0);
                                 if (!lastGratdedCut) return null;
@@ -521,6 +524,8 @@ const getStyles = (theme: any, isWide: boolean = false) => StyleSheet.create({
   maxWidthWrapper: {
       width: '100%',
       maxWidth: 1200,
+      position: 'relative',
+      zIndex: 10,
   },
   header: {
     flexDirection: 'row',

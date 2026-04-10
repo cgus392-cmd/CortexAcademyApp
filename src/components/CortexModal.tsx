@@ -18,7 +18,7 @@ import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../context/ThemeContext';
 import { Radius, Shadows, Spacing } from '../constants/theme';
-import { useData } from '../context/DataContext';
+import { useData, resolveColor } from '../context/DataContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -141,11 +141,11 @@ export default function CortexModal({ isVisible, type, initialData, onClose, onS
                 {/* Header */}
                 <View style={styles.header}>
                   <View style={styles.headerTitleRow}>
-                    <View style={[styles.iconBox, { backgroundColor: isTask ? theme.primary + '20' : color + '20' }]}>
+                    <View style={[styles.iconBox, { backgroundColor: isTask ? theme.primary + '20' : resolveColor(color) + '20' }]}>
                       {isTask ? (
                         <Calendar size={20} color={theme.primary} />
                       ) : (
-                        <StickyNote size={20} color={color} />
+                        <StickyNote size={20} color={resolveColor(color)} />
                       )}
                     </View>
                     <Text style={[styles.title, { color: theme.text }]}>
@@ -208,11 +208,11 @@ export default function CortexModal({ isVisible, type, initialData, onClose, onS
                             style={[
                               styles.coursePill,
                               { backgroundColor: theme.bg, borderColor: theme.border },
-                              selectedCourse === course.id && { backgroundColor: course.color + '20', borderColor: course.color }
+                              selectedCourse === course.id && { backgroundColor: resolveColor(course.color) + '20', borderColor: resolveColor(course.color) }
                             ]}
                           >
-                            <View style={[styles.dot, { backgroundColor: course.color }]} />
-                            <Text style={[styles.coursePillText, { color: theme.textSecondary }, selectedCourse === course.id && { color: course.color }]}>
+                            <View style={[styles.dot, { backgroundColor: resolveColor(course.color) }]} />
+                            <Text style={[styles.coursePillText, { color: theme.textSecondary }, selectedCourse === course.id && { color: resolveColor(course.color) }]}>
                               {course.code}
                             </Text>
                           </TouchableOpacity>
@@ -265,8 +265,8 @@ export default function CortexModal({ isVisible, type, initialData, onClose, onS
                 >
                   <LinearGradient
                     colors={[
-                      (isTask ? theme.primary : color) || '#06B6D4', 
-                      (isTask ? theme.primaryDark : color) || '#06B6D4'
+                      resolveColor(isTask ? theme.primary : color) || '#06B6D4', 
+                      resolveColor(isTask ? theme.primaryDark : color) || '#06B6D4'
                     ]}
                     style={styles.saveBtnGradient}
                   >

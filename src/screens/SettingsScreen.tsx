@@ -11,11 +11,22 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
 } from 'react-native';
+import Constants from 'expo-constants';
+import logger from '../services/Logger';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { auth, db } from '../services/firebase';
-import firestore from '@react-native-firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  serverTimestamp,
+  doc,
+  setDoc,
+  deleteDoc,
+  getDoc
+} from '@react-native-firebase/firestore';
 import { 
   User, 
   Cpu, 
@@ -39,7 +50,16 @@ import {
   Trophy,
   Award,
   Sparkles,
-  Brain
+  Brain,
+  RefreshCw,
+  Check,
+  MessageSquare,
+  AlertCircle,
+  ShieldCheck, 
+  BookOpen, 
+  Download, 
+  Upload,
+  Terminal
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { MotiView, AnimatePresence, MotiText } from 'moti';
@@ -54,12 +74,11 @@ import { MatteCard } from '../components/design-system/CortexMatte';
 import SettingCell from '../components/SettingCell';
 import { NotificationService } from '../services/NotificationService';
 import * as SecureStore from 'expo-secure-store';
-import { ShieldCheck, BookOpen, Download, Upload } from 'lucide-react-native';
 import UserManual from '../components/UserManual';
 import BackupService from '../services/BackupService';
 import AccountCenterCard from '../components/AccountCenterCard';
 
-type SettingsView = 'menu' | 'profile' | 'appearance' | 'academic' | 'security' | 'ia' | 'support' | 'notifications' | 'account_hub' | 'backup';
+type SettingsView = 'menu' | 'profile' | 'appearance' | 'academic' | 'security' | 'ia' | 'support' | 'notifications' | 'account_hub' | 'backup' | 'feedback';
 
 export default function SettingsScreen({ navigation, onLogout }: { navigation: any; onLogout: () => void }) {
   const insets = useSafeAreaInsets();
@@ -82,6 +101,13 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
   const [notifications, setNotifications] = useState(profile.preferences?.notifications !== false);
   const [nebulaIntensity, setNebulaIntensity] = useState(profile.preferences?.nebulaIntensity || 0.8);
   const [glassOpacity, setGlassOpacity] = useState(profile.preferences?.glassOpacity || 0.15);
+  
+  // Feedback Hub states
+  const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [feedbackCat, setFeedbackCat] = useState<'bug' | 'idea' | 'general'>('general');
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+  const [attachLogs, setAttachLogs] = useState(false);
+
   const [glassBlur, setGlassBlur] = useState(profile.preferences?.glassBlur || 20);
   const [hapticStyle, setHapticStyle] = useState(profile.preferences?.hapticStyle || 'medium');
   const [uniDomain, setUniDomain] = useState(profile.universityDomain || profile.domain || '');
@@ -108,10 +134,10 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
   const [isLoginSaved, setIsLoginSaved] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
   const [confirmPass, setConfirmPass] = useState('');
-   const [showAccountControlModal, setShowAccountControlModal] = useState(false);
-   const [accountActionType, setAccountActionType] = useState<'format' | 'delete' | null>(null);
-   const [isDeleting, setIsDeleting] = useState(false);
-   const [farewellStep, setFarewellStep] = useState(0); // 0: Normal, 1: Goodbye message
+  const [showAccountControlModal, setShowAccountControlModal] = useState(false);
+  const [accountActionType, setAccountActionType] = useState<'format' | 'delete' | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [farewellStep, setFarewellStep] = useState(0); // 0: Normal, 1: Goodbye message
 
   const match = findUniversityDomain(uniDomain);
 
@@ -185,10 +211,11 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
         bio: bio,
         isPublic: isPublic,
         photoURL: photoURL,
+        fallbackPhotoURL: match ? match.logo : (profile.fallbackPhotoURL || profile.universityLogo),
         modality: modality,
         social: { linkedin: linkedin },
         university: match ? match.name : profile.university,
-        universityLogo: match ? match.logo : profile.universityLogo,
+        universityLogo: match ? match.logo : (profile.universityLogo || profile.fallbackPhotoURL), // Mantener para compatibilidad
         universityColor: match ? match.color : profile.universityColor,
         vaultEnabled: isBiometricEnabled,
         preferences: {
@@ -274,7 +301,9 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
         name: userProfile?.name, 
         institutionalEmail: userProfile?.institutionalEmail,
         university: userProfile?.university,
-        universityLogo: userProfile?.universityLogo,
+        photoURL: userProfile?.photoURL,
+        fallbackPhotoURL: userProfile?.fallbackPhotoURL || userProfile?.universityLogo,
+        universityLogo: userProfile?.universityLogo || userProfile?.fallbackPhotoURL, // Legacy
         universityColor: userProfile?.universityColor,
         domain: userProfile?.domain,
         universityDomain: userProfile?.universityDomain
@@ -291,7 +320,7 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
     };
 
     try {
-      await db.collection('users').doc(auth.currentUser?.uid).set(resetData, { merge: true });
+      await setDoc(doc(db, 'users', auth.currentUser?.uid || ''), resetData, { merge: true });
       
       // Limpiar Caché Local para evitar inconsistencias
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
@@ -304,8 +333,12 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
       setShowAccountControlModal(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Cortex Formateado', 'Tu ecosistema ha sido reiniciado. Tu identidad se mantiene intacta.');
-      navigation.replace('Home'); 
-    } catch (e) {
+      
+      if (navigation.canGoBack()) {
+          navigation.goBack();
+      } else {
+          navigation.replace('MainTabs', { screen: 'Academic' });
+      }    } catch (e) {
       setIsDeleting(false);
       Alert.alert('Error', 'No se pudieron formatear los datos.');
     }
@@ -329,7 +362,7 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
         if (!uid) throw new Error('No UID');
 
         // 1. Borrar de Firestore
-        await db.collection('users').doc(uid).delete();
+        await deleteDoc(doc(db, 'users', uid));
         
         // 2. Limpiar Caché Local
         const AsyncStorage = require('@react-native-async-storage/async-storage').default;
@@ -385,7 +418,16 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
     await BackupService.exportData(backupData);
   };
 
-  const { courses, tasks, scheduleBlocks, notes, notifications: appNotifications, restoreData, isSyncing: dataSyncing } = useData();
+  const { 
+    courses, 
+    tasks, 
+    scheduleBlocks, 
+    notes, 
+    notifications: appNotifications, 
+    restoreData, 
+    isSyncing: dataSyncing,
+    triggerLocalBroadcast 
+  } = useData();
 
   const handleImportBackup = async () => {
     Alert.alert(
@@ -409,10 +451,37 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
 
   const SubHeader = ({ title }: { title: string }) => (
     <View style={styles.subHeader}>
-      <TouchableOpacity onPress={() => setCurrentView('menu')} style={styles.backBtn}>
-        <ChevronLeft size={24} color={theme.primary} />
-      </TouchableOpacity>
-      <Text style={styles.subTitle}>{title}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15, flex: 1 }}>
+        <TouchableOpacity onPress={() => setCurrentView('menu')} style={styles.backBtn}>
+          <ChevronLeft size={24} color={theme.primary} />
+        </TouchableOpacity>
+        <Text style={styles.subTitle}>{title}</Text>
+      </View>
+      
+      {isModified && (
+        <MotiView
+          from={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+        >
+          <TouchableOpacity 
+            style={[styles.saveBtnSarah, { backgroundColor: saveStatus === 'saved' ? '#10B981' : theme.primary }]} 
+            onPress={handleSave}
+            disabled={saveStatus === 'saving'}
+          >
+            {saveStatus === 'saving' ? (
+                <View style={{ transform: [{ scale: 0.8 }] }}><MotiView animate={{ rotate: '360deg' }} transition={{ loop: true, duration: 1000, type: 'timing' }}><RefreshCw size={14} color="#FFF" /></MotiView></View>
+            ) : saveStatus === 'saved' ? (
+                <Check size={14} color="#FFF" />
+            ) : (
+                <Zap size={14} color="#FFF" />
+            )}
+            <Text style={styles.saveBtnText}>
+                {saveStatus === 'saving' ? '...' : (saveStatus === 'saved' ? 'LISTO' : 'GUARDAR')}
+            </Text>
+          </TouchableOpacity>
+        </MotiView>
+      )}
     </View>
   );
 
@@ -1317,12 +1386,28 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
           {currentView === 'support' && (
             <MotiView key="support" from={{ opacity: 0, translateX: 50 }} animate={{ opacity: 1, translateX: 0 }} exit={{ opacity: 0, translateX: -50 }}>
                 <SubHeader title="Ayuda" />
-                <View style={styles.glassCard}>
-                    <TouchableOpacity style={styles.row} onPress={() => Linking.openURL('mailto:soporte@cortex.edu.co')}>
-                        <Text style={styles.rowLabel}>Contactar Soporte</Text>
+                <MatteCard radius={Radius.lg}>
+                    <TouchableOpacity 
+                        style={styles.row} 
+                        onPress={() => {
+                            Haptics.selectionAsync();
+                            setCurrentView('feedback');
+                        }}
+                    >
+                        <View style={styles.rowLabelGroup}>
+                            <MessageSquare size={18} color={theme.primary} />
+                            <Text style={styles.rowLabel}>Enviar Feedback</Text>
+                        </View>
                         <ChevronRight size={18} color={theme.textMuted} />
                     </TouchableOpacity>
-                </View>
+                    <TouchableOpacity style={[styles.row, { borderTopWidth: 0.5, borderTopColor: theme.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]} onPress={() => Linking.openURL('mailto:cgus392@gmail.com')}>
+                        <View style={styles.rowLabelGroup}>
+                            <LifeBuoy size={18} color={theme.text} />
+                            <Text style={styles.rowLabel}>Soporte Directo (Email)</Text>
+                        </View>
+                        <ChevronRight size={18} color={theme.textMuted} />
+                    </TouchableOpacity>
+                </MatteCard>
 
                 <Text style={styles.viewLabel}>CONTROL DE CUENTA</Text>
                 <MatteCard radius={20} style={{ padding: 4 }}>
@@ -1353,6 +1438,141 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
                         <ChevronRight size={18} color={theme.textMuted} />
                     </TouchableOpacity>
                 </MatteCard>
+            </MotiView>
+          )}
+
+          {currentView === 'feedback' && (
+            <MotiView key="feedback" from={{ opacity: 0, translateX: 50 }} animate={{ opacity: 1, translateX: 0 }} exit={{ opacity: 0, translateX: -50 }}>
+                <SubHeader title="Feedback Hub" />
+                
+                <Text style={styles.viewLabel}>CATEGORÍA DE REPORTE</Text>
+                <View style={[styles.toggleRow, { marginBottom: 20 }]}>
+                    {[
+                        { id: 'bug', label: 'Error', icon: AlertCircle },
+                        { id: 'idea', label: 'Idea', icon: Zap },
+                        { id: 'general', label: 'General', icon: MessageSquare }
+                    ].map(cat => (
+                        <TouchableOpacity 
+                            key={cat.id} 
+                            onPress={() => { Haptics.selectionAsync(); setFeedbackCat(cat.id as any); }} 
+                            style={[
+                                styles.miniToggle, 
+                                { flex: 1, height: 45 },
+                                feedbackCat === cat.id && { backgroundColor: theme.primary }
+                            ]}
+                        >
+                            <cat.icon size={14} color={feedbackCat === cat.id ? '#FFF' : theme.text} style={{ marginRight: 6 }} />
+                            <Text style={[styles.miniToggleText, feedbackCat === cat.id && { color: '#FFF' }]}>{cat.label}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                <Text style={styles.viewLabel}>MENSAJE</Text>
+                <MatteCard radius={20} style={{ padding: 15 }}>
+                    <TextInput 
+                        style={[styles.bioInput, { height: 150, textAlignVertical: 'top' }]}
+                        placeholder="Cuéntanos qué tienes en mente..."
+                        placeholderTextColor={theme.textMuted}
+                        multiline
+                        value={feedbackMsg}
+                        onChangeText={setFeedbackMsg}
+                    />
+                </MatteCard>
+
+                <View style={{ marginTop: 20 }}>
+                    <MatteCard radius={18} style={{ padding: 4 }}>
+                        <TouchableOpacity 
+                            style={[styles.row, { borderBottomWidth: 0 }]} 
+                            onPress={() => { setAttachLogs(!attachLogs); Haptics.selectionAsync(); }}
+                        >
+                            <View style={styles.rowLabelGroup}>
+                                <Terminal size={18} color={attachLogs ? theme.primary : theme.textMuted} />
+                                <View style={{ marginLeft: 10 }}>
+                                    <Text style={[styles.rowLabel, { fontSize: 13 }]}>Terminal de Diagnóstico</Text>
+                                    <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2, fontWeight: 'bold' }}>
+                                        {attachLogs ? "Logs técnicos activos (envío detallado)" : "Envío rápido (sin logs técnicos)"}
+                                    </Text>
+                                </View>
+                            </View>
+                            <Switch 
+                                value={attachLogs} 
+                                onValueChange={setAttachLogs}
+                                trackColor={{ false: theme.divider, true: theme.primary + '40' }}
+                                thumbColor={attachLogs ? theme.primary : '#f4f3f4'}
+                            />
+                        </TouchableOpacity>
+                    </MatteCard>
+                </View>
+
+                <TouchableOpacity 
+                    style={[
+                        styles.saveBtnSarah, 
+                        { 
+                            marginTop: 30, 
+                            width: '100%', 
+                            height: 55, 
+                            opacity: (!feedbackMsg.trim() || isSendingFeedback) ? 0.5 : 1 
+                        }
+                    ]}
+                    disabled={!feedbackMsg.trim() || isSendingFeedback}
+                    onPress={async () => {
+                        if (!feedbackMsg.trim()) return;
+                        setIsSendingFeedback(true);
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        try {
+                            // Using Modular API for stability and clean logs
+                            await addDoc(collection(db, 'feedback'), {
+                                userId: auth.currentUser?.uid || 'anonymous',
+                                userName: profile.name || 'Usuario Cortex',
+                                message: feedbackMsg,
+                                category: feedbackCat,
+                                platform: Platform.OS,
+                                timestamp: serverTimestamp(),
+                                status: 'pending',
+                                metadata: {
+                                    appVersion: Constants.expoConfig?.version || '3.1.5-INDUSTRIAL',
+                                    device: {
+                                        modelName: Constants.deviceName || 'Unknown Device',
+                                        brand: Platform.OS === 'ios' ? 'Apple' : (Constants.platform?.android?.model || 'Android-Model'),
+                                        os: Platform.OS || 'unknown',
+                                        osVersion: Platform.Version || 'N/A',
+                                        isEmulator: Constants.isDevice === false
+                                    },
+                                    runtime: {
+                                        expoVersion: Constants.expoVersion || 'N/A',
+                                        installationId: (Constants as any).installationId || 'N/A',
+                                        sessionId: Constants.sessionId || 'N/A',
+                                        runtimeVersion: (Constants.expoConfig as any)?.runtimeVersion || 'N/A'
+                                    },
+                                    systemLogs: attachLogs ? (logger.getLogs() || []) : []
+                                }
+                            });
+                            Alert.alert('Feedback Enviado', 'Gracias por ayudarnos a mejorar el ecosistema Cortex.');
+                            setFeedbackMsg('');
+                            setCurrentView('menu');
+                        } catch (e) {
+                            console.error("Feedback error:", e);
+                            Alert.alert('Error', 'No se pudo enviar el feedback. Verifica tu conexión.');
+                        } finally {
+                            setIsSendingFeedback(false);
+                        }
+                    }}
+                >
+                    {isSendingFeedback ? (
+                        <MotiView animate={{ rotate: '360deg' }} transition={{ loop: true, duration: 1000, type: 'timing' }}>
+                            <RefreshCw size={20} color="#FFF" />
+                        </MotiView>
+                    ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <Upload size={18} color="#FFF" />
+                            <Text style={[styles.saveBtnText, { fontSize: 14 }]}>DESPLEGAR REPORTE</Text>
+                        </View>
+                    )}
+                </TouchableOpacity>
+
+                <Text style={[styles.rowDesc, { textAlign: 'center', marginTop: 20, paddingHorizontal: 20 }]}>
+                    Tu reporte será enviado directamente a la Admin Tower para su revisión por el equipo técnico de Cortex.
+                </Text>
             </MotiView>
           )}
 
@@ -1649,6 +1869,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   rowLabelGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowLabel: { fontSize: 14, fontWeight: '800', color: theme.text, letterSpacing: -0.3 },
+  bioInput: { fontSize: 14, fontWeight: '600', color: theme.text, padding: 0 },
   rowDesc: { fontSize: 11, color: theme.textMuted, fontWeight: '500', marginTop: 2 },
   divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 10 },
 
@@ -1656,8 +1877,6 @@ const getStyles = (theme: any) => StyleSheet.create({
   content: { padding: 20 },
   headerTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   title: { fontSize: 32, fontWeight: '900', color: theme.text, letterSpacing: -1 },
-  saveBtnSarah: { backgroundColor: theme.primary, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, ...Shadows.sm },
-  saveBtnText: { color: '#FFF', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
   categorySection: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20, marginTop: 20, borderRadius: 20, backgroundColor: theme.error + '10' },
   logoutText: { fontSize: 16, fontWeight: '800', color: theme.error },
@@ -1886,6 +2105,27 @@ const getStyles = (theme: any) => StyleSheet.create({
     color: theme.text,
     marginBottom: 20,
     letterSpacing: -1,
+  },
+  saveBtnSarah: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 18,
+    gap: 8,
+    backgroundColor: theme.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   logoutBtnSarah: {
     flexDirection: 'row',

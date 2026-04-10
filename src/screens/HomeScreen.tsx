@@ -45,7 +45,7 @@ import { MotiView, AnimatePresence } from 'moti';
 import { Colors, Spacing, Radius, Shadows } from '../constants/theme';
 import CleanBackground from '../components/CleanBackground';
 import { useTheme } from '../context/ThemeContext';
-import { useData } from '../context/DataContext';
+import { useData, resolveColor } from '../context/DataContext';
 import UserManual from '../components/UserManual';
 
 import { MatteCard, MatteUnderlay as GlassLayers, MatteIconButton as GlassIconButton } from '../components/design-system/CortexMatte'
@@ -207,13 +207,13 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
     : avgGrade;
 
   const displayLabel = isAccumulatedGlobalView 
-    ? "PUNTOS GANADOS" 
-    : "PROMEDIO (P.A.P.A)";
+    ? "PROMEDIO GLOBAL" 
+    : "PROMEDIO PARCIAL";
 
   const userName = userProfile?.name || 'Estudiante';
   const university = userProfile?.university || 'Cortex Academy';
   const domain = userProfile?.universityDomain || userProfile?.domain;
-  const universityLogo = userProfile?.universityLogo || (domain ? getUniversityLogo(domain) : null);
+  const fallbackPhotoURL = userProfile?.fallbackPhotoURL || (domain ? getUniversityLogo(domain) : null);
   const initial = userName.charAt(0).toUpperCase();
   const photoURL = userProfile?.photoURL;
   const { compactMode } = theme;
@@ -441,7 +441,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
       transition={{ type: 'spring', delay: BASE_DELAY + 500 + index * 80 }}
     >
       <MatteCard radius={25} style={styles.agendaCard}>
-        <View style={[styles.agendaLine, { backgroundColor: block.color }]} />
+        <View style={[styles.agendaLine, { backgroundColor: resolveColor(block.color) }]} />
         <View style={styles.agendaInfo}>
           <Text style={styles.agendaTitle}>{block.subject}</Text>
           <View style={styles.agendaMeta}>
@@ -503,8 +503,8 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
               <View style={{ marginLeft: 12, flex: 1 }}>
                 <Text style={[styles.welcomeText, compactMode && { fontSize: 24 }]}>Hola, {userName}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                  {universityLogo && (
-                    <Image source={{ uri: universityLogo }} style={{ width: 14, height: 14, marginRight: 6, borderRadius: 2 }} />
+                  {fallbackPhotoURL && (
+                    <Image source={{ uri: fallbackPhotoURL }} style={{ width: 14, height: 14, marginRight: 6, borderRadius: 2 }} />
                   )}
                   <Text style={[styles.greetingText, { marginTop: 0 }]} numberOfLines={1}>
                     {getGreeting()} • {university}
@@ -562,11 +562,11 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
               </GlassIconButton>
 
               <View>
-                <CortySpeechBubble visible={showCortyBubble} message={bubbleMessage} />
+                {/* Corty silenciado por petición del usuario */}
                 <GlassIconButton
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowNotifications(true);
+                    navigation.navigate('CommunicationsHub');
                     setShowCortyBubble(false);
                   }}
                   size={42}
@@ -928,7 +928,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                 name={course.name} 
                 code={course.code} 
                 average={course.average} 
-                color={course.color} 
+                color={resolveColor(course.color)} 
                 progress={course.progress} 
                 accumulatedScore={AcademicEngine.calculateAccumulatedScore(course.cuts).toFixed(2)}
                 onPress={() => navigation.navigate('Courses', { screen: 'CourseDetail', params: { courseId: course.id } })} 
@@ -1074,7 +1074,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
               <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.isDark ? 'rgba(0,0,0,0.8)' : '#fff', opacity: 0.9 }]} />
               
               <View style={styles.qrHeaderSarah}>
-                <Image source={{ uri: universityLogo || getUniversityLogo('google.com') }} style={{ width: 32, height: 32, borderRadius: 6 }} />
+                <Image source={{ uri: fallbackPhotoURL || getUniversityLogo('google.com') }} style={{ width: 32, height: 32, borderRadius: 6 }} />
                 <Text style={styles.identityTitle}>Cortex Access</Text>
               </View>
 
@@ -1116,7 +1116,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
               <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.isDark ? 'rgba(0,0,0,0.8)' : '#fff', opacity: 0.95 }]} />
               
               <View style={styles.carnetHeader}>
-                <Image source={{ uri: universityLogo || getUniversityLogo('google.com') }} style={styles.carnetUniLogo} />
+                <Image source={{ uri: fallbackPhotoURL || getUniversityLogo('google.com') }} style={styles.carnetUniLogo} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.carnetUniName}>{university}</Text>
                   <Text style={styles.carnetStatus}>TI UNIFICADA</Text>

@@ -89,15 +89,11 @@ export default function CortexCore({
               strokeWidth="4" 
               strokeLinecap="round" 
             />
-            <MotiView
-              animate={{ opacity: [0.4, 1, 0.4] }}
-              transition={{ loop: true, duration: 2000 }}
-            >
-              <Circle 
-                cx="100" cy="20" r="6" 
-                fill={activeExpression === 'success' ? theme.success : theme.secondary || theme.primary} 
-              />
-            </MotiView>
+            <Circle 
+              cx="100" cy="20" r="6" 
+              fill={activeExpression === 'success' ? theme.success : theme.secondary || theme.primary}
+              opacity={0.8}
+            />
           </G>
 
           {/* Body Shape */}

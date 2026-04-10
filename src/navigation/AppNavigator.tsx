@@ -12,6 +12,7 @@ import {
   Platform
 } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { navigationRef } from './RootNavigation';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
@@ -51,6 +52,7 @@ import ChatScreen from '../screens/ChatScreen';
 import CronosScreen from '../screens/CronosScreen';
 import NexusScreen from '../screens/NexusScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import CommunicationsHub from '../screens/CommunicationsHub';
 import AcademicScreen from '../screens/AcademicScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -116,7 +118,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
       animate={{ translateY: isGloballyVisible ? 0 : 110, opacity: isGloballyVisible ? 1 : 0 }}
       transition={compactMode ? { type: 'timing', duration: 300 } : { type: 'spring', damping: 25, stiffness: 90, mass: 0.8 }}
       pointerEvents={isGloballyVisible ? 'auto' : 'none'}
-    ><AnimatePresence>{(!!isDashboard && !hasVisitedAI) && (<CotyGreeting key="coty-greeting" isVisible={true} rightOffset={cotyRight} />)}</AnimatePresence><MotiView
+    ><AnimatePresence></AnimatePresence><MotiView
         from={{ translateY: 100, opacity: 0 }}
         animate={{ translateY: 0, opacity: 1 }}
         transition={{ type: 'timing', duration: 400, delay: 500 }}
@@ -426,6 +428,7 @@ function RootNavigator({ onLogout }: { onLogout: () => void }) {
         {() => <SettingsNav onLogout={onLogout} />}
       </RootStack.Screen>
       <RootStack.Screen name="Academic" component={AcademicScreen} />
+      <RootStack.Screen name="CommunicationsHub" component={CommunicationsHub} />
       <RootStack.Screen name="Calendar" component={CalendarScreen} />
       <RootStack.Screen name="CourseDetail">
         {(props: any) => <CourseDetailScreen {...props} />}
@@ -489,7 +492,7 @@ export default function AppNavigator() {
           };
           await AsyncStorage.setItem('@last_user', JSON.stringify(data));
         } catch (e) {
-          console.log("Error syncing session meta:", e);
+          // console.log("Error syncing session meta:", e);
         }
       };
       syncMeta();
@@ -518,7 +521,7 @@ export default function AppNavigator() {
           // El lobby se ocultará cuando la app esté montada (HomeScreen useEffect)
       } else if (authState === 'APP' && next === 'ONBOARDING') {
           // BLOQUEO: Si ya estamos en la APP, no volvemos a Onboarding por fluctuaciones de datos
-          console.log('Sync Guard: Ignorando petición de Onboarding tras reconexión.');
+          // console.log('Sync Guard: Ignorando petición de Onboarding tras reconexión.');
       } else if (authState !== next) {
           setAuthState(next);
       }
@@ -528,18 +531,28 @@ export default function AppNavigator() {
   // Hook para ocultar el lobby después de un tiempo prudencial
   React.useEffect(() => {
     if (showLobby && (authState === 'APP' || authState === 'ONBOARDING')) {
+      // 💡 REDUCED TIMEOUT: If we have cache, the transition should be faster
+      const duration = userProfile ? 1500 : 3500; 
       const timer = setTimeout(() => {
         setShowLobby(false);
-        console.log('Lobby timeout reached, forcing app visibility.');
-      }, 3500); 
+        // console.log('📡 [Cortex Core] Lobby transition complete.');
+      }, duration); 
       return () => clearTimeout(timer);
     }
-  }, [showLobby, authState]);
+  }, [showLobby, authState, !!userProfile]);
 
-  if (isLoading) {
+  if (isLoading && !userProfile) { // 💡 Only block if we have NO profile (literally first boot)
     return (
-      <View style={{ flex: 1, backgroundColor: theme.isDark ? '#000000' : '#F8F4F0', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={theme.primary} />
+      <View style={{ flex: 1, backgroundColor: theme.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <GlassLayers radius={0} />
+        <CortexCore theme={theme} size={160} expression="happy" message="Iniciando núcleo..." />
+        <MotiView 
+          from={{ opacity: 0 }} 
+          animate={{ opacity: 1 }} 
+          style={{ marginTop: 20 }}
+        >
+          <ActivityIndicator size="small" color={theme.primary} />
+        </MotiView>
       </View>
     );
   }
@@ -609,7 +622,7 @@ export default function AppNavigator() {
             transition={{ type: 'timing', duration: 500 }}
             style={{ flex: 1, backgroundColor: theme.bg }}
           >
-            <NavigationContainer theme={customNavTheme}>
+            <NavigationContainer theme={customNavTheme} ref={navigationRef}>
               <RootNavigator onLogout={() => {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   setLobbyMessage('¡Ya te vas amix, nos vemos!!');
@@ -638,7 +651,12 @@ export default function AppNavigator() {
             exit={{ opacity: 0 }}
             transition={{ type: 'timing', duration: 600 }}
             style={[StyleSheet.absoluteFill, { backgroundColor: theme.isDark ? '#000' : '#F8F4F0', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }]}
-          ><CortexCore theme={theme} size={160} expression={lobbyMessage.includes('vas') ? 'normal' : 'happy'} message={lobbyMessage} /><MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 500 }} style={{ marginTop: 20 }}><ActivityIndicator size="small" color={theme.primary} /></MotiView></MotiView>
+          >
+            <CortexCore theme={theme} size={160} expression={lobbyMessage.includes('vas') ? 'normal' : 'happy'} message={lobbyMessage} />
+            <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 500 }} style={{ marginTop: 20 }}>
+              <ActivityIndicator size="small" color={theme.primary} />
+            </MotiView>
+          </MotiView>
         )}
       </AnimatePresence>
     </View>

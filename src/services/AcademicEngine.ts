@@ -95,7 +95,7 @@ export const calculateCourseGPA = (cuts: Cut[]): number => {
 };
 
 /**
- * Calculates current Points Earned (absolute score) towards the 5.0 total.
+ * Calculates current "Promedio Global" (absolute score) towards the 5.0 total.
  */
 export const calculateAccumulatedScore = (cuts: Cut[]): number => {
     let total = 0;
@@ -138,8 +138,18 @@ export const calculateCourseProgress = (cuts: Cut[]): number => {
   return Math.min(100, completedCourseWeight);
 };
 
+export const calculateCourseGlobalScore = (course: any): number => {
+  if (!course || !course.cuts) return 0;
+  let score = 0;
+  course.cuts.forEach((cut: any) => {
+    const grade = parseFloat(String(cut.grade)) || 0;
+    score += grade * (cut.weight / 100);
+  });
+  return score;
+};
+
 /**
- * Calculates the Global Weighted GPA (P.A.P.A) across multiple courses.
+ * Calculates the "Promedio Parcial" (P.A.P.A) across multiple courses.
  * This counts ONLY evaluated credits (where at least one cut has a grade > 0).
  */
 export const calculateGlobalWeightedGPA = (courses: Course[]): number => {
@@ -166,7 +176,7 @@ export const calculateGlobalWeightedGPA = (courses: Course[]): number => {
 };
 
 /**
- * Calculates the Global Accumulated Points (Semester Progress Score) across multiple courses.
+ * Calculates the "Promedio Global" (Semester Progress Score) across multiple courses.
  * This counts ALL credits in the semester.
  * Example: 30% of the semester evaluated at a 4.0 average = 1.20 points earned.
  */

@@ -44,14 +44,7 @@ export default function NexusScreen({ navigation }: { navigation: any }) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { userProfile, courses, tasks, updateUserProfile } = useData();
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "msg-0",
-      role: "assistant",
-      content: "¡Hola! Soy Cortex IA. Analicé tu rendimiento académico actual a través de la integración nativa. ¿En qué te ayudo hoy?",
-      timestamp: new Date().toISOString()
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [activeModel, setActiveModel] = useState<'flash' | 'pro'>(userProfile?.selectedModel === 'pro' ? 'pro' : 'flash');

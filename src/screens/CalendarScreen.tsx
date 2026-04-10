@@ -26,7 +26,7 @@ import { Spacing, Radius, Shadows } from '../constants/theme';
 import CleanBackground from '../components/CleanBackground';
 import { useTheme } from '../context/ThemeContext';
 import { cacheData, getCachedData, StorageKeys } from '../utils/storage';
-import { useData } from '../context/DataContext';
+import { useData, resolveColor } from '../context/DataContext';
 import { MatteCard, MatteUnderlay } from '../components/design-system/CortexMatte';
 
 const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -172,7 +172,7 @@ export default function CalendarScreen({ navigation }: { navigation: any }) {
               {/* Time Indicator */}
               <View style={styles.timeWrapper}>
                 <Text style={styles.startTime}>{block.startTime}</Text>
-                <View style={[styles.timeDot, { backgroundColor: block.color }]} />
+                <View style={[styles.timeDot, { backgroundColor: resolveColor(block.color) }]} />
                 <View style={[styles.timeLine, { backgroundColor: theme.divider }]} />
               </View>
 
@@ -182,8 +182,8 @@ export default function CalendarScreen({ navigation }: { navigation: any }) {
                 <View style={styles.classInfo}>
                   <View style={styles.classHeader}>
                     <Text style={styles.subjectText}>{block.subject}</Text>
-                    <View style={[styles.colorBadge, { backgroundColor: block.color + '20' }]}>
-                        <View style={[styles.colorDot, { backgroundColor: block.color }]} />
+                    <View style={[styles.colorBadge, { backgroundColor: resolveColor(block.color) + '20' }]}>
+                        <View style={[styles.colorDot, { backgroundColor: resolveColor(block.color) }]} />
                     </View>
                   </View>
                   

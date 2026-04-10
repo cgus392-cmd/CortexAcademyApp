@@ -12,8 +12,16 @@
       "resizeMode": "contain",
       "backgroundColor": "#060A10"
     },
+    "updates": {
+      "url": "https://u.expo.dev/7fa9f74b-af20-414a-a841-2a4bc8f59f37"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cortex.hubos",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,13 +30,11 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.cortex.hubos",
-      "versionCode": 31,
+      "versionCode": 32,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
         "POST_NOTIFICATIONS",
         "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       ]
@@ -47,11 +53,18 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
-          "color": "#ffffff"
+          "icon": "./assets/notification-icon.png",
+          "color": "#007AFF"
         }
       ],
       "expo-sharing"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7fa9f74b-af20-414a-a841-2a4bc8f59f37"
+      }
+    },
+    "owner": "cg-labs"
   }
 }

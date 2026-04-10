@@ -20,7 +20,7 @@ import { MotiView } from 'moti';
 import { Colors, Shadows } from '../constants/theme';
 import CleanBackground from '../components/CleanBackground';
 import { useTheme } from '../context/ThemeContext';
-import { useData } from '../context/DataContext';
+import { useData, resolveColor } from '../context/DataContext';
 import FocusTransition from '../components/FocusTransition';
 import { useScrollToHideTabBar } from '../hooks/useScrollToHideTabBar';
 import { 
@@ -123,7 +123,7 @@ export default function CoursesScreen({ navigation }: { navigation: any }) {
                         onPress={() => navigation.navigate('CourseDetail', { courseId: course.id })}
                     >
                         {/* BORDE DE ACENTO 8PX */}
-                        <View style={[styles.accentStrip, { backgroundColor: course.color }]} />
+                        <View style={[styles.accentStrip, { backgroundColor: resolveColor(course.color) }]} />
                         
                         <View style={styles.cardContent}>
                             <View style={styles.cardTop}>
@@ -144,20 +144,21 @@ export default function CoursesScreen({ navigation }: { navigation: any }) {
                             {/* BARRA DE PROGRESO NEÓN */}
                             <View style={styles.progressRow}>
                                 <View style={styles.barBg}>
-                                    <View style={[styles.barFill, { width: `${course.progress}%`, backgroundColor: course.color }]} />
+                                    <View style={[styles.barFill, { width: `${course.progress}%`, backgroundColor: resolveColor(course.color) }]} />
                                 </View>
-                                <Text style={[styles.progressVal, { color: course.color }]}>{course.progress}%</Text>
+                                <Text style={[styles.progressVal, { color: resolveColor(course.color) }]}>{course.progress}%</Text>
                             </View>
 
                             <View style={styles.cardBottom}>
                                 <View style={styles.profContainer}>
-                                    <View style={[styles.profInitialBg, { backgroundColor: course.color + '20' }]}>
-                                        <Text style={[styles.profInitialText, { color: course.color }]}>
+                                    <View style={[styles.profInitialBg, { backgroundColor: resolveColor(course.color) + '20' }]}>
+                                        <Text style={[styles.profInitialText, { color: resolveColor(course.color) }]}>
                                             {course.professor?.charAt(0) || 'P'}
                                         </Text>
                                     </View>
                                     <Text style={styles.profName}>{course.professor?.split(' ').slice(-1) || 'Prof'}</Text>
                                 </View>
+
                                 
                                 <View style={styles.statusBadge}>
                                     {course.modality === 'virtual' ? <Monitor size={14} color={theme.textMuted} /> : <BookOpen size={14} color={theme.textMuted} />}
