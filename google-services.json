@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "299757536536",
+    "project_id": "cortexwebos",
+    "storage_bucket": "cortexwebos.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:299757536536:android:43d079285ed6cf5d818a6d",
+        "android_client_info": {
+          "package_name": "com.cortex.hubos"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "299757536536-kodq4r8f3i9uv850d378al3k21mp388d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cortex.hubos",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "299757536536-mepfte45p9balmf73ecklk8dib7nf2te.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cortex.hubos",
+            "certificate_hash": "9afcd7708b1f34fe3519f82c2576b08d97990863"
+          }
+        },
+        {
+          "client_id": "299757536536-rib4p4ui126co33nkt15n4cofpnpo6dt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBEoe1LMqpemYMovHFO__m2t24dQ0vQv_c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "299757536536-rib4p4ui126co33nkt15n4cofpnpo6dt.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
