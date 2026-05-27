@@ -31,6 +31,7 @@ import { generateContextAwareText } from '../services/gemini';
 import * as AcademicEngine from '../services/AcademicEngine';
 import { MatteCard } from '../components/design-system/CortexMatte';
 import CortySpeechBubble from '../components/CortySpeechBubble';
+import AddCourseModal from '../components/modules/AddCourseModal';
 import { auth, db } from '../services/firebase';
 import { doc, setDoc } from '@react-native-firebase/firestore';
 
@@ -47,7 +48,8 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
   const [aiInsight, setAiInsight] = useState('Toca el icono para obtener un insight de Cortex IA.');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isSandboxMode, setIsSandboxMode] = useState(false);
-  const [simulatedAverages, setSimulatedAverages] = useState<{[key: string]: number}>({});
+  const [simulatedAverages, setSimulatedAverages] = useState<Record<string, number>>({});
+  const [isAddModalVisible, setAddModalVisible] = useState(false);
   const [showCortyHint, setShowCortyHint] = useState(false);
  
   useEffect(() => {
@@ -155,35 +157,25 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
     return '#10B981';
   };
 
-  const handleAddCourse = async () => {
-    if (!auth.currentUser) return;
-    const prefs = userProfile?.preferences || {};
-    const defaultCuts = [
-      { id: Date.now() + 1, name: 'Corte 1', weight: prefs.cut1Weight || 30, grade: '0.0', activities: [], method: 'basic' },
-      { id: Date.now() + 2, name: 'Corte 2', weight: prefs.cut2Weight || 30, grade: '0.0', activities: [], method: 'basic' },
-      { id: Date.now() + 3, name: 'Corte 3', weight: prefs.cut3Weight || 40, grade: '0.0', activities: [], method: 'basic' },
-    ];
-    
-    const newCourse = {
-      id: Date.now().toString(),
-      name: 'Nueva Materia',
-      code: 'MT-00',
-      professor: 'Profesor X',
-      credits: 3,
-      semester: selectedSemester,
-      color: theme.primary,
-      average: '0.00',
-      progress: 0,
-      cuts: defaultCuts,
-      activities: [],
-      resources: [],
-      schedule: { day: 'Lunes', time: '08:00 - 10:00' }
-    };
-    
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await addCourse(newCourse);
-    // Navigate straight to detail so they can edit the name and cuts
-    navigation.navigate('CourseDetail', { courseId: newCourse.id });
+  const handleAddCourse = async (courseData: any) => {
+    try {
+      const prefs = courses[0]?.cuts ? [] : [
+        { id: Date.now() + 1, name: 'Corte 1', weight: 30, grade: '0.0', activities: [], method: 'basic' },
+        { id: Date.now() + 2, name: 'Corte 2', weight: 30, grade: '0.0', activities: [], method: 'basic' },
+        { id: Date.now() + 3, name: 'Corte 3', weight: 40, grade: '0.0', activities: [], method: 'basic' },
+      ];
+      
+      const newCourseId = await addCourse({
+        ...courseData,
+        cuts: prefs,
+        activities: [],
+        resources: [],
+      });
+      // Optionally navigate to the detail view once created securely
+      // navigation.navigate('CourseDetail', { courseId: newCourseId });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
@@ -494,13 +486,16 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
         ))}
       </View>
 
-      <MotiView
+        <MotiView
             from={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 800 }}
             style={styles.maxWidthWrapper}
         >
-           <TouchableOpacity style={styles.addCourseBtn} onPress={handleAddCourse}>
+           <TouchableOpacity style={styles.addCourseBtn} onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setAddModalVisible(true);
+           }}>
               <Plus size={20} color={theme.text} />
               <Text style={styles.addCourseText}>Agregar Materia al Semestre {selectedSemester}</Text>
            </TouchableOpacity>
@@ -508,6 +503,13 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      <AddCourseModal 
+        isVisible={isAddModalVisible}
+        defaultSemester={selectedSemester}
+        onClose={() => setAddModalVisible(false)}
+        onSave={handleAddCourse}
+      />
     </CleanBackground>
   );
 }

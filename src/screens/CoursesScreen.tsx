@@ -28,6 +28,7 @@ import {
   MatteUnderlay, 
   MatteIconButton, 
 } from '../components/design-system/CortexMatte';
+import AddCourseModal from '../components/modules/AddCourseModal';
 
 const { width } = Dimensions.get('window');
 
@@ -39,7 +40,30 @@ export default function CoursesScreen({ navigation }: { navigation: any }) {
   const { courses } = useData();
   const styles = getStyles(theme);
   const [filter, setFilter] = useState<FilterType>('all');
+  const [isAddModalVisible, setAddModalVisible] = useState(false);
   const handleScroll = useScrollToHideTabBar(40);
+  const { addCourse } = useData();
+
+  const handleCreateCourse = async (courseData: any) => {
+    try {
+      const prefs = courses[0]?.cuts ? [] : [
+        { id: Date.now() + 1, name: 'Corte 1', weight: 30, grade: '0.0', activities: [], method: 'basic' },
+        { id: Date.now() + 2, name: 'Corte 2', weight: 30, grade: '0.0', activities: [], method: 'basic' },
+        { id: Date.now() + 3, name: 'Corte 3', weight: 40, grade: '0.0', activities: [], method: 'basic' },
+      ];
+      
+      const newCourseId = await addCourse({
+        ...courseData,
+        cuts: prefs,
+        activities: [],
+        resources: [],
+      });
+      // Optionally navigate to details
+      // navigation.navigate('CourseDetail', { courseId: newCourseId });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const filtered = courses.filter((c: any) => {
     if (filter === 'all') return true;
@@ -58,7 +82,10 @@ export default function CoursesScreen({ navigation }: { navigation: any }) {
                 />
                 <MatteIconButton 
                     icon={Plus}
-                    onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
+                    onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setAddModalVisible(true);
+                    }}
                 />
             </View>
             <View style={styles.titleSection}>
@@ -173,6 +200,12 @@ export default function CoursesScreen({ navigation }: { navigation: any }) {
             <View style={{ height: 120 }} />
         </ScrollView>
       </FocusTransition>
+      
+      <AddCourseModal 
+        isVisible={isAddModalVisible}
+        onClose={() => setAddModalVisible(false)}
+        onSave={handleCreateCourse}
+      />
     </CleanBackground>
   );
 }

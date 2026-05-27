@@ -75,7 +75,7 @@ export interface DataContextProps {
   addTask: (newTask: any) => Promise<void>;
   deleteTask: (taskId: number) => Promise<void>;
   updateCourse: (updatedCourse: any) => Promise<void>;
-  addCourse: (newCourse: any) => Promise<void>;
+  addCourse: (newCourse: any) => Promise<string>;
   deleteCourse: (courseId: string | number) => Promise<void>;
   addScheduleBlock: (newBlock: any) => Promise<void>;
   updateScheduleBlock: (updatedBlock: any) => Promise<void>;
@@ -123,7 +123,7 @@ export const DataContext = createContext<DataContextProps>({
   addTask: async () => {},
   deleteTask: async () => {},
   updateCourse: async () => {},
-  addCourse: async () => {},
+  addCourse: async () => { return ''; },
   deleteCourse: async () => {},
   addScheduleBlock: async () => {},
   updateScheduleBlock: async () => {},
@@ -333,11 +333,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCourses(prev => prev.map(c => String(c.id) === uc.id ? uc : c));
   };
 
-  const addCourse = async (newCourse: any) => {
-    if (!auth.currentUser) return;
+  const addCourse = async (newCourse: any): Promise<string> => {
+    if (!auth.currentUser) return '';
     const id = `course_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const courseWithId = { ...newCourse, id, progress: 0, average: '0.00' };
     setCourses(prev => [...prev, courseWithId]);
+    return id;
   };
 
   const deleteCourse = async (courseId: string | number) => {

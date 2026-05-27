@@ -33,15 +33,15 @@ Mientras el usuario espera que se compile la app en la nube de Expo, debes gener
 **🚀 Título del Release (GitHub):**
 `Cortex Hub OS v[VERSIÓN] ([Nombre del Update, ej. Smart Check Update])`
 
-**📝 Notas del Parche (Changelog):**
-[Escribe una lista en bullet-points con emojis destacando los 3 o 4 cambios técnicos y visuales más importantes que se hicieron durante esta sesión. Debe sonar profesional pero emocionante.]
+**📝 Notas del Parche (Exclusivo para GitHub Release):**
+[Escribe la lista en un bloque de código Markdown (` ```markdown `). Usa **texto en negrita** y *cursivas* con emojis. Esto es solo para pegarlo en GitHub.]
 
 **🔥 Instrucciones para Firebase:**
 Recuérdale al usuario que debe ir a Firebase (`system/config`) y actualizar:
 - `currentVersion`: "[VERSIÓN]"
-- `releaseSize`: "[Dejar que el usuario lo calcule o poner aproximado de 30.0 MB]"
+- `releaseSize`: "[Peso aproximado en MB]"
 - `updateUrl`: "El link directo al .apk recién subido en GitHub"
-- `releaseNotes`: [Array de strings con las notas del parche generadas arriba]
+- `releaseNotes`: [Array de textos planos simples, SIN formato Markdown, ya que Firebase lo consume como lista cruda]
 
 ## 4. Confirmación
 Espera la confirmación del usuario de que el APK fue descargado, subido a GitHub y de que Firebase fue actualizado exitosamente. Finalmente, celebra el lanzamiento.
