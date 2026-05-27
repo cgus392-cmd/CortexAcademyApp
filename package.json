@@ -50,6 +50,7 @@
     "expo-system-ui": "~55.0.15",
     "expo-updates": "~55.0.20",
     "expo-web-browser": "~55.0.14",
+    "firebase": "^12.13.0",
     "lucide-react-native": "^0.577.0",
     "moti": "^0.30.0",
     "react": "19.2.0",

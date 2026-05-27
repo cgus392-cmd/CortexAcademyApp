@@ -33,7 +33,6 @@ import { MatteCard } from '../components/design-system/CortexMatte';
 import CortySpeechBubble from '../components/CortySpeechBubble';
 import AddCourseModal from '../components/modules/AddCourseModal';
 import { auth, db } from '../services/firebase';
-import { doc, setDoc } from '@react-native-firebase/firestore';
 
 const { width } = Dimensions.get('window');
 
@@ -105,7 +104,7 @@ export default function AcademicScreen({ navigation }: { navigation: any }) {
       });
 
       if (needsUpdate && auth.currentUser) {
-        setDoc(doc(db, 'users', auth.currentUser.uid), { courses: updatedCourses }, { merge: true });
+        db.collection('users').doc(auth.currentUser.uid).set({ courses: updatedCourses }, { merge: true });
       }
     }
   }, [courses]); // Cambiar courses.length por courses para detectar cambios internos

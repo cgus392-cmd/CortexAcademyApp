@@ -27,9 +27,7 @@ import { useTheme } from '../context/ThemeContext';
 import { MatteCard } from '../components/design-system/CortexMatte';
 import CortexCore from '../components/CortexCore';
 import CortexPrompt from '../components/CortexPrompt';
-import { auth, db } from '../services/firebase';
-import firestore from '@react-native-firebase/firestore';
-import auth_native from '@react-native-firebase/auth';
+import { auth, db, GoogleAuthProvider } from '../services/firebase';
 import { useResponsive } from '../hooks/useResponsive';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -186,7 +184,7 @@ export default function AuthScreen({ onLogin, onGuest }: { onLogin: () => void; 
       // Intentar obtener el nombre real de Firestore primero
       const userRef = db.collection('users').doc(u.uid);
       const userSnap = await userRef.get();
-      const userData = userSnap.exists() ? userSnap.data() : null;
+      const userData = userSnap.exists ? userSnap.data() : null;
 
       const data = {
         uid: u.uid,
@@ -277,7 +275,7 @@ export default function AuthScreen({ onLogin, onGuest }: { onLogin: () => void; 
       if (!idToken) throw new Error('No se recibió el ID Token de Google.');
 
       setLoading(true);
-      const credential = auth_native.GoogleAuthProvider.credential(idToken);
+      const credential = GoogleAuthProvider.credential(idToken);
       await auth.signInWithCredential(credential);
       
       setTimeout(async () => { 

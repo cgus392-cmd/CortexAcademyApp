@@ -21,16 +21,7 @@ import Constants from 'expo-constants';
 import logger from '../services/Logger';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { auth, db } from '../services/firebase';
-import { 
-  collection, 
-  addDoc, 
-  serverTimestamp,
-  doc,
-  setDoc,
-  deleteDoc,
-  getDoc
-} from '@react-native-firebase/firestore';
+import { auth, db, doc, setDoc, deleteDoc } from '../services/firebase';
 import { 
   User, 
   Cpu, 

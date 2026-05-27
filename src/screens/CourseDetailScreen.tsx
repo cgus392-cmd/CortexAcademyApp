@@ -30,7 +30,6 @@ import {
   Loader
 } from 'lucide-react-native';
 import { auth, db } from '../services/firebase';
-import { doc, setDoc } from '@react-native-firebase/firestore';
 import * as Haptics from 'expo-haptics';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';

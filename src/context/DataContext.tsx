@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../services/firebase';
-import firestore from '@react-native-firebase/firestore';
 import { ACHIEVEMENTS, checkAchievementConditions } from '../services/achievements';
 import * as Haptics from 'expo-haptics';
 import { Alert } from 'react-native';
@@ -211,9 +210,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // 📡 PROXIMIDAD ALPHA: Listener de Tiempo Real para Push (Plan B Infalible)
   useEffect(() => {
-    const unsubscribe = firestore()
-      .doc('system/realtime_push')
-      .onSnapshot(async (snapshot) => {
+    const unsubscribe = db.doc('system/realtime_push')
+      .onSnapshot(async (snapshot: any) => {
         if (!snapshot.exists) return;
         
         const data = snapshot.data();
