@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Linking, Image } from 'react-native';
 import { isWeb, getWebPlatform, isStandalonePWA } from '../utils/WebPlatform';
 import { BlurView } from 'expo-blur';
 import { ShareIcon, PlusSquareIcon, SmartphoneIcon } from 'lucide-react-native';
@@ -11,6 +11,16 @@ interface WebGuardProps {
 export default function WebGuard({ children }: WebGuardProps) {
   const [platform, setPlatform] = useState<'ios' | 'android' | 'windows' | 'mac' | 'other' | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [bypassCount, setBypassCount] = useState(0);
+  const [forceBypass, setForceBypass] = useState(false);
+
+  const handleSecretTap = () => {
+    const newCount = bypassCount + 1;
+    setBypassCount(newCount);
+    if (newCount >= 5) {
+      setForceBypass(true);
+    }
+  };
 
   useEffect(() => {
     if (isWeb) {
@@ -19,8 +29,8 @@ export default function WebGuard({ children }: WebGuardProps) {
     }
   }, []);
 
-  // Si no es web o si es una PWA instalada, renderizar la app normal
-  if (!isWeb || isStandalone) {
+  // Si no es web, si es una PWA instalada, o si se activó el bypass secreto
+  if (!isWeb || isStandalone || forceBypass) {
     return <>{children}</>;
   }
 
@@ -29,7 +39,11 @@ export default function WebGuard({ children }: WebGuardProps) {
     return (
       <View style={styles.container}>
         <View style={styles.card}>
-          <SmartphoneIcon color="#60A5FA" size={64} style={{ marginBottom: 20 }} />
+          <TouchableWithoutFeedback onPress={handleSecretTap}>
+            <View>
+              <SmartphoneIcon color="#60A5FA" size={64} style={{ marginBottom: 20 }} />
+            </View>
+          </TouchableWithoutFeedback>
           <Text style={styles.title}>Exclusivo para iOS</Text>
           <Text style={styles.description}>
             Cortex Hub OS en web está diseñado exclusivamente como una PWA para dispositivos iPhone y iPad.
@@ -53,7 +67,9 @@ export default function WebGuard({ children }: WebGuardProps) {
     return (
       <View style={styles.container}>
         <View style={styles.iosCard}>
-          <Image source={require('../../assets/icon.png')} style={styles.appIcon} />
+          <TouchableWithoutFeedback onPress={handleSecretTap}>
+            <Image source={require('../../assets/icon.png')} style={styles.appIcon} />
+          </TouchableWithoutFeedback>
           <Text style={styles.iosTitle}>Instalar Cortex Hub</Text>
           <Text style={styles.iosDescription}>
             Para una experiencia nativa y notificaciones, agrega esta aplicación a tu pantalla de inicio.
