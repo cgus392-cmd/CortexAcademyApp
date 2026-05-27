@@ -41,7 +41,14 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "Cortex Hub",
+      "shortName": "Cortex",
+      "lang": "es",
+      "themeColor": "#060A10",
+      "backgroundColor": "#060A10",
+      "display": "standalone",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-secure-store",

@@ -71,6 +71,7 @@ import NetworkBanner from './src/components/NetworkBanner';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as RootNavigation from './src/navigation/RootNavigation';
 import GlobalBroadcast from './src/components/GlobalBroadcast';
+import WebGuard from './src/components/WebGuard';
 
 import UpdateManager from './src/components/UpdateManager';
 
@@ -156,7 +157,9 @@ export default function App() {
       <DataProvider>
         <ThemeProvider>
           <TutorialProvider>
-            <AppRoot />
+            <WebGuard>
+              <AppRoot />
+            </WebGuard>
           </TutorialProvider>
         </ThemeProvider>
       </DataProvider>
