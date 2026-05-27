@@ -1,6 +1,6 @@
-import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyA6ad4UWDIp4Len_uT2ZjoZt0zChFCmO2w",
@@ -12,18 +12,18 @@ const firebaseConfig = {
   measurementId: "G-RX791QJ62P"
 };
 
-console.log('--- WEB FIREBASE INIT ---');
+console.log('--- WEB FIREBASE COMPAT INIT ---');
 
-let app;
-if (getApps().length === 0) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApp();
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
 }
 
-const authInstance = getAuth(app);
-const db = getFirestore(app);
+const authInstance = firebase.auth();
+const db = firebase.firestore();
 
-console.log('--- WEB FIREBASE READY ---');
+export const GoogleAuthProvider = firebase.auth.GoogleAuthProvider;
+
+console.log('--- WEB FIREBASE COMPAT READY ---');
 
 export { authInstance as auth, db };
+export default firebase;

@@ -21,7 +21,7 @@ import Constants from 'expo-constants';
 import logger from '../services/Logger';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { auth, db, doc, setDoc, deleteDoc } from '../services/firebase';
+import { auth, db } from '../services/firebase';
 import { 
   User, 
   Cpu, 
@@ -340,7 +340,7 @@ export default function SettingsScreen({ navigation, route, onLogout }: { naviga
     };
 
     try {
-      await setDoc(doc(db, 'users', auth.currentUser?.uid || ''), resetData, { merge: true });
+      await db.collection('users').doc(auth.currentUser?.uid || '').set(resetData, { merge: true });
       
       // Limpiar Caché Local para evitar inconsistencias
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
@@ -389,7 +389,7 @@ export default function SettingsScreen({ navigation, route, onLogout }: { naviga
 
         // 1. Borrar de Firestore
         setDeleteProgressText('Eliminando registros de la base de datos...');
-        await deleteDoc(doc(db, 'users', currentUser.uid)).catch(() => {});
+        await db.collection('users').doc(currentUser.uid).delete().catch(() => {});
         
         // 2. Limpiar Caché Local
         setDeleteProgressText('Limpiando memoria caché local...');
