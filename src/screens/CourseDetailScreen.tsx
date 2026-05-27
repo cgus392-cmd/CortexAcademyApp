@@ -784,9 +784,9 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
       {/* Grade CRUD Modal */}
       <Modal visible={gradeModalVisible} transparent animationType="fade">
         <KeyboardAvoidingView 
-          behavior="padding"
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
-          keyboardVerticalOffset={0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           <View style={[styles.modalContent, { backgroundColor: theme.surface, maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
@@ -859,9 +859,9 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
       {/* Cut CRUD Modal */}
       <Modal visible={cutModalVisible} transparent animationType="fade">
         <KeyboardAvoidingView 
-          behavior="padding"
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
-          keyboardVerticalOffset={0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           <View style={[styles.modalContent, { backgroundColor: theme.surface, maxHeight: '95%' }]}>
             <View style={styles.modalHeader}>
@@ -964,9 +964,9 @@ export default function CourseDetailScreen({ route, navigation }: Props) {
       {/* Course Header Edit Modal */}
       <Modal visible={courseModalVisible} transparent animationType="fade">
         <KeyboardAvoidingView 
-          behavior="padding"
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
-          keyboardVerticalOffset={0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>

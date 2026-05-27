@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
@@ -47,7 +48,7 @@ import { generateContextAwareText } from '../services/gemini';
 import FocusTransition from '../components/FocusTransition';
 import { useScrollToHideTabBar } from '../hooks/useScrollToHideTabBar';
 import { NotificationService } from '../services/NotificationService';
-import { MatteCard, MatteUnderlay, MatteIconButton, MatteBanner } from '../components/design-system/CortexMatte';
+import { MatteCard, MatteUnderlay, MatteIconButton, MatteBanner, MatteNeuralContent } from '../components/design-system/CortexMatte';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -333,10 +334,15 @@ export default function CronosScreen() {
 
                 <MatteBanner 
                   title="Cortex Brain Suggestion"
-                  subtitle="Tu ritmo actual sugiere que una sesión de 25m de Investigación de Operaciones maximizará tu retención."
+                  subtitle={
+                    <MatteNeuralContent 
+                        content={focusInsight} 
+                        animate={isAiLoading === false && focusInsight !== 'Consulta a Cortex un consejo para tu sesión de hoy.'}
+                    />
+                  }
                   icon={Sparkles}
                   color={theme.primary}
-                  onPress={() => Alert.alert("Cortex Brain", "Análisis de flujo: ¡Es el momento perfecto para enfocarte!")}
+                  onPress={fetchFocusTip}
                 />
               </MotiView>
             )}
@@ -725,7 +731,11 @@ export default function CronosScreen() {
             visible={isModalVisible}
             onRequestClose={() => setIsModalVisible(false)}
         >
-            <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.modalOverlay}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            >
                 <View style={styles.modalContent}>
                     <MatteUnderlay radius={30} baseColor={theme.isDark ? 'rgba(28,28,30,0.98)' : 'rgba(255,255,255,0.98)'} />
                     <View style={styles.modalHeader}>
@@ -842,7 +852,7 @@ export default function CronosScreen() {
                         </TouchableOpacity>
                     </ScrollView>
                 </View>
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
         </View>
       </FocusTransition>

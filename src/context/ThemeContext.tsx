@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useColorScheme, Appearance } from 'react-native';
+import { useColorScheme, Appearance, PixelRatio } from 'react-native';
 import { PALETTES, Colors } from '../constants/theme';
 import { useData } from './DataContext';
 
@@ -14,6 +14,7 @@ type ThemeType = typeof Colors & typeof PALETTES.cortex_classic & {
   glassBlur: number;
   performanceMode: 'eco' | 'ahorro' | 'balanced' | 'ultra';
   compactMode: boolean;
+  uiScale: 'small' | 'medium' | 'large' | 'auto';
 };
 
 interface ThemeContextType {
@@ -29,12 +30,15 @@ interface ThemeContextType {
   glassBlur: number;
   performanceMode: 'eco' | 'ahorro' | 'balanced' | 'ultra';
   compactMode: boolean;
+  uiScale: 'small' | 'medium' | 'large' | 'auto';
+  scale: (size: number) => number;
   updateAppearance: (updates: { 
     intensity?: number; 
     opacity?: number; 
     blur?: number;
     performanceMode?: 'eco' | 'ahorro' | 'balanced' | 'ultra';
     compactMode?: boolean;
+    uiScale?: 'small' | 'medium' | 'large' | 'auto';
   }) => void;
 }
 
@@ -48,8 +52,20 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [glassBlur, setGlassBlur] = useState(45);
   const [performanceMode, setPerformanceMode] = useState<'eco' | 'ahorro' | 'balanced' | 'ultra'>('balanced');
   const [compactMode, setCompactMode] = useState(false);
+  const [uiScale, setUiScale] = useState<'small' | 'medium' | 'large' | 'auto'>('auto');
   const systemColorScheme = useColorScheme();
   const { userProfile, updateUserProfile } = useData();
+  
+  const getScaleFactor = () => {
+    switch (uiScale) {
+      case 'small': return 0.85;
+      case 'large': return 1.15;
+      case 'medium': return 1.0;
+      case 'auto':
+      default: return 1.0; // Let system scale handle it
+    }
+  };
+  const scale = (size: number) => size * getScaleFactor();
   
   // Load persistence
   useEffect(() => {
@@ -60,12 +76,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         
         const savedAppearance = await AsyncStorage.getItem('@cortex_appearance_pref');
         if (savedAppearance) {
-            const { intensity, opacity, blur, performanceMode: perf, compactMode: comp } = JSON.parse(savedAppearance);
+            const { intensity, opacity, blur, performanceMode: perf, compactMode: comp, uiScale: scaleP } = JSON.parse(savedAppearance);
             if (intensity !== undefined) setNebulaIntensity(intensity);
             if (opacity !== undefined) setGlassOpacity(opacity);
             if (blur !== undefined) setGlassBlur(blur);
             if (perf !== undefined) setPerformanceMode(perf);
             if (comp !== undefined) setCompactMode(comp);
+            if (scaleP !== undefined) setUiScale(scaleP);
         }
       } catch (e) { console.error('Error loading theme:', e); }
     };
@@ -93,6 +110,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (userProfile.preferences.glassBlur !== undefined) setGlassBlur(userProfile.preferences.glassBlur);
         if (userProfile.preferences.performanceMode !== undefined) setPerformanceMode(userProfile.preferences.performanceMode);
         if (userProfile.preferences.compactMode !== undefined) setCompactMode(userProfile.preferences.compactMode);
+        if (userProfile.preferences.uiScale !== undefined) setUiScale(userProfile.preferences.uiScale);
     }
   }, [userProfile?.preferences, userProfile?.theme]);
 
@@ -146,6 +164,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     glassBlur,
     performanceMode,
     compactMode,
+    uiScale,
   };
 
   const setDarkMode = async (mode: 'light' | 'dark' | 'auto') => {
@@ -177,12 +196,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       glassBlur,
       performanceMode,
       compactMode,
+      uiScale,
+      scale,
       updateAppearance: async (updates) => {
           if (updates.intensity !== undefined) setNebulaIntensity(updates.intensity);
           if (updates.opacity !== undefined) setGlassOpacity(updates.opacity);
           if (updates.blur !== undefined) setGlassBlur(updates.blur);
           if (updates.performanceMode !== undefined) setPerformanceMode(updates.performanceMode);
           if (updates.compactMode !== undefined) setCompactMode(updates.compactMode);
+          if (updates.uiScale !== undefined) setUiScale(updates.uiScale);
           
           try {
               const current = { 
@@ -190,7 +212,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   opacity: updates.opacity ?? glassOpacity, 
                   blur: updates.blur ?? glassBlur,
                   performanceMode: updates.performanceMode ?? performanceMode,
-                  compactMode: updates.compactMode ?? compactMode
+                  compactMode: updates.compactMode ?? compactMode,
+                  uiScale: updates.uiScale ?? uiScale
               };
               await AsyncStorage.setItem('@cortex_appearance_pref', JSON.stringify(current));
               updateUserProfile({ 
@@ -200,7 +223,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                       glassOpacity: current.opacity,
                       glassBlur: current.blur,
                       performanceMode: current.performanceMode,
-                      compactMode: current.compactMode
+                      compactMode: current.compactMode,
+                      uiScale: current.uiScale
                   } 
               });
           } catch (e) {}

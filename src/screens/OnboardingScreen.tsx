@@ -11,9 +11,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Image
+  Image,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth, db } from '../services/firebase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView, AnimatePresence } from 'moti';
 import { 
@@ -36,12 +38,14 @@ import {
   Globe,
   AlertCircle,
   Smartphone,
-  Bell
+  Bell,
+  Camera
 } from 'lucide-react-native';
 import { NotificationService } from '../services/NotificationService';
 import NotificationPermissionModal from '../components/NotificationPermissionModal';
 import Svg, { Path, Circle, G, Line } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { MatteCard } from '../components/design-system/CortexMatte';
@@ -99,9 +103,12 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
   const { userProfile, updateUserProfile } = useData();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteStatus, setDeleteStatus] = useState('');
 
   // Form State
   const [fullName, setFullName] = useState(userProfile?.name || '');
+  const [photoURL, setPhotoURL] = useState(userProfile?.photoURL || '');
   const [uniInput, setUniInput] = useState('');
   const [isResolving, setIsResolving] = useState(false);
   const [uniResults, setUniResults] = useState<UniversityMatch | null>(null);
@@ -116,7 +123,7 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
   const [showPermsModal, setShowPermsModal] = useState(false);
   const [hasPermissions, setHasPermissions] = useState(false);
 
-  const totalSteps = 7;
+  const totalSteps = 8;
 
   // Pre-fill name
   useEffect(() => {
@@ -139,7 +146,7 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
   const handleNext = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (step < totalSteps) {
-      if (step === 6 && !hasPermissions) {
+      if (step === 7 && !hasPermissions) {
           setShowPermsModal(true);
           return;
       }
@@ -150,6 +157,7 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
       try {
         await updateUserProfile({
           name: fullName,
+          photoURL: photoURL,
           university: uniResults?.name || uniInput,
           universityLogo: uniResults?.logo || '',
           universityDomain: uniResults?.domain || '',
@@ -175,7 +183,42 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
     if (step > 1) {
       setStep(step - 1);
     } else {
-      onBackToAuth();
+      Alert.alert(
+        "Cancelar Creación",
+        "Si regresas ahora se cancelará la creación de tu cuenta y los datos serán borrados permanentemente. Esta acción es irreversible.",
+        [
+          { text: "Quedarme", style: "cancel" },
+          { 
+            text: "Sí, cancelar", 
+            style: "destructive", 
+            onPress: async () => {
+               try {
+                 setIsDeleting(true);
+                 setDeleteStatus('Contactando servidores de Cortex...');
+                 const user = auth.currentUser;
+                 if (user) {
+                   setDeleteStatus('Eliminando registros de la base de datos...');
+                   await db.collection('users').doc(user.uid).delete().catch(() => {});
+                   
+                   setDeleteStatus('Eliminando cuenta de autenticación...');
+                   await user.delete();
+                   
+                   setDeleteStatus('¡Cuenta eliminada exitosamente!');
+                   await new Promise(resolve => setTimeout(resolve, 1500));
+                 }
+               } catch(e: any) {
+                 console.error("Delete Error:", e);
+                 setDeleteStatus(`Error: ${e?.message || 'Fallo al eliminar'}`);
+                 await new Promise(resolve => setTimeout(resolve, 3500));
+                 auth.signOut();
+               } finally {
+                 setIsDeleting(false);
+                 onBackToAuth();
+               }
+            }  
+          }
+        ]
+      );
     }
   };
 
@@ -212,19 +255,19 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
 
   const onboardingPhrases: Record<number, string> = {
     1: `¡Bienvenido, ${fullName.split(' ')[0] || 'estudiante'}! Soy Corty, tu asistente.`,
-    2: "Excelente carrera. ¿En qué semestre vas?",
-    3: "Apuntar alto es la clave del éxito. ¡Vamos!",
-    4: "Dime cómo quieres que te hable hoy.",
-    5: "Ese color se ve increíble con tu estilo.",
-    6: "Conecta tu Hub para no perderte nada.",
-    7: "Casi terminamos. Revisa los términos finales."
+    2: "Dale un toque personal a tu perfil.",
+    3: "Excelente carrera. ¿En qué semestre vas?",
+    4: "Apuntar alto es la clave del éxito. ¡Vamos!",
+    5: "Dime cómo quieres que te hable hoy.",
+    6: "Ese color se ve increíble con tu estilo.",
+    7: "Conecta tu Hub para no perderte nada.",
+    8: "Casi terminamos. Revisa los términos finales."
   };
 
-  const getCortyExpression = () => {
-    if (step === 6) return 'success';
-    if (isResolving) return 'thinking';
-    if (step === 5) return 'happy';
-    return 'normal';
+  const getFaceState = () => {
+    if (step === 8) return 'success';
+    if (step === 7) return 'happy';
+    return 'neutral';
   };
 
   const ThemePreview = () => (
@@ -249,6 +292,24 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
     </MotiView>
   );
 
+  if (isDeleting) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
+        <CortexCore theme={theme} size={160} expression="normal" message={deleteStatus} />
+        <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 300 }} style={{ marginTop: 20 }}>
+          {deleteStatus.includes('exitosamente') ? (
+            <Check size={24} color={theme.primary} />
+          ) : deleteStatus.includes('Error') ? (
+            <AlertCircle size={24} color="#EF4444" />
+          ) : (
+            <ActivityIndicator size="small" color={theme.primary} />
+          )}
+        </MotiView>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, theme.isDark && { backgroundColor: '#000' }]}>
       <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
@@ -259,7 +320,11 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
         style={StyleSheet.absoluteFill} 
       />
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <SafeAreaView style={{ flex: 1 }}>
           <View style={styles.headerRow}>
              <TouchableOpacity onPress={handleBack} style={styles.backBtnWrapper}>
@@ -281,7 +346,7 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
             <CortexCore 
                 theme={theme} 
                 message={onboardingPhrases[step]} 
-                expression={getCortyExpression() as any}
+                expression={getFaceState() as any}
                 size={140}
             />
 
@@ -354,6 +419,69 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
                 )}
 
                 {step === 2 && (
+                    <MotiView
+                        from={{ opacity: 0, translateY: 20 }}
+                        animate={{ opacity: 1, translateY: 0 }}
+                        exit={{ opacity: 0, translateY: -20 }}
+                        style={styles.stepContainer}
+                    >
+                        <Text style={[styles.sectionTitle, theme.isDark && { color: '#fff' }]}>Añade una foto de perfil</Text>
+                        <Text style={[styles.sectionSubtitle, theme.isDark && { color: '#bbb' }]}>Sube una imagen para que tu experiencia sea más personal.</Text>
+                        
+                        <View style={{ alignItems: 'center', marginVertical: 30 }}>
+                            <TouchableOpacity 
+                                onPress={async () => {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    let result = await ImagePicker.launchImageLibraryAsync({
+                                        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                        allowsEditing: true,
+                                        aspect: [1, 1],
+                                        quality: 0.3,
+                                        base64: true,
+                                    });
+                                    if (!result.canceled && result.assets[0].base64) {
+                                        setPhotoURL(`data:image/jpeg;base64,${result.assets[0].base64}`);
+                                    }
+                                }}
+                                style={{
+                                    width: 140,
+                                    height: 140,
+                                    borderRadius: 70,
+                                    backgroundColor: theme.isDark ? '#2A2A2A' : '#F0F0F0',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    borderWidth: 2,
+                                    borderColor: theme.isDark ? '#444' : '#E0E0E0',
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                {photoURL ? (
+                                    <Image source={{ uri: photoURL }} style={{ width: '100%', height: '100%' }} />
+                                ) : (
+                                    <UserIcon color={theme.isDark ? '#888' : '#A0A0A0'} size={60} />
+                                )}
+                                <View style={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    width: '100%',
+                                    backgroundColor: 'rgba(0,0,0,0.5)',
+                                    paddingVertical: 6,
+                                    alignItems: 'center'
+                                }}>
+                                    <Camera color="#fff" size={20} />
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.actionRow}>
+                            <TouchableOpacity style={[styles.primaryButton, theme.isDark && { backgroundColor: '#fff' }]} onPress={handleNext} disabled={loading}>
+                                <Text style={[styles.primaryText, theme.isDark && { color: '#000' }]}>{photoURL ? 'Continuar' : 'Omitir'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </MotiView>
+                )}
+
+                {step === 3 && (
                     <>
                         <View style={styles.titleSection}>
                             <Text style={[styles.title, theme.isDark && { color: '#fff' }]}>Perfil Académico</Text>
@@ -382,7 +510,7 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
                     </>
                 )}
 
-                {step === 3 && (
+                {step === 4 && (
                     <>
                         <View style={styles.titleSection}>
                             <Text style={[styles.title, theme.isDark && { color: '#fff' }]}>Metas de Éxito</Text>
@@ -402,7 +530,7 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
                     </>
                 )}
 
-                {step === 4 && (
+                {step === 5 && (
                     <>
                         <View style={styles.titleSection}>
                             <Text style={[styles.title, theme.isDark && { color: '#fff' }]}>Mi Personalidad</Text>
@@ -427,7 +555,7 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
                     </>
                 )}
 
-                {step === 5 && (
+                {step === 6 && (
                     <>
                         <View style={styles.titleSection}>
                             <Text style={[styles.title, theme.isDark && { color: '#fff' }]}>Tu Estilo</Text>
@@ -468,7 +596,7 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
                 )}
 
                 {/* STEP 6: PERMISSIONS */}
-                {step === 6 && (
+                {step === 7 && (
                     <>
                         <View style={styles.titleSection}>
                             <Text style={[styles.title, theme.isDark && { color: '#fff' }]}>Conecta tu Hub</Text>
@@ -507,7 +635,7 @@ export default function OnboardingScreen({ onComplete, onBackToAuth }: { onCompl
                 )}
 
                 {/* STEP 7: TERMS */}
-                {step === 7 && (
+                {step === 8 && (
                     <>
                         {!isTermsExpanded && (
                             <View style={styles.titleSection}>

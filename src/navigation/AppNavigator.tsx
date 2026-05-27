@@ -32,7 +32,9 @@ import {
   ScanLine,
   Layout as LayoutIcon,
   LogOut,
-  User
+  User,
+  Brain,
+  GraduationCap
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -79,7 +81,6 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const isWide = isTablet || isLaptop;
   const { userProfile } = useData();
   const { performanceMode, compactMode, glassOpacity: prefOpacity } = theme;
-  const [isOpen, setIsOpen] = useState(false);
   const [isTabBarVisible, setIsTabBarVisible] = useState(true);
   const { isActive: isTutorialActive } = useTutorial();
   const isDark = theme.isDark;
@@ -87,9 +88,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const [hasVisitedAI, setHasVisitedAI] = useState(false);
   
   const isGloballyVisible = isTabBarVisible && !isTutorialActive;
-  const isDashboard = state.routes[state.index].name === 'Home';
   const screenWidth = Dimensions.get('window').width;
-  const cotyRight = ((screenWidth - 40) * (1.5 / 5.6)) + 20; // Cálculo preciso basado en la distribución de flex del TabBar
 
   React.useEffect(() => {
     if (state.routes[state.index].name === 'Cortex IA') {
@@ -100,15 +99,9 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   React.useEffect(() => {
     const unsubscribe = globalEmitter.on('toggleTabBar', (visible: boolean) => {
       setIsTabBarVisible(visible);
-      if (!visible && isOpen) setIsOpen(false);
     });
     return unsubscribe;
-  }, [isOpen]);
-
-  const toggleMenu = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsOpen(!isOpen);
-  };
+  }, []);
 
   if (isWide) return null;
 
@@ -141,60 +134,50 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         })}</MotiView>
 
       <View style={styles.fabWrapper}>
-        <AnimatePresence>
-          {isOpen && (
-            <>
-              <MotiView
-                from={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                style={[StyleSheet.absoluteFill, styles.backdrop]}
-              >
-                <TouchableOpacity 
-                   style={StyleSheet.absoluteFill} 
-                   activeOpacity={1} 
-                   onPress={() => setIsOpen(false)} 
-                />
-              </MotiView>
-
-              {[
-                { icon: ScanLine, label: 'Escanear', color: '#6366F1', delay: 0 },
-                { icon: StickyNote, label: 'Nuevo Memo', color: '#10B981', delay: 100 },
-                { icon: CheckSquare, label: 'Tarea', color: '#F59E0B', delay: 200 },
-              ].map((action, i) => (<MotiView key={i} from={{ opacity: 0, translateY: 0, scale: 0.5 }} animate={{ opacity: 1, translateY: -70 - (i * 65), scale: 1 }} exit={{ opacity: 0, translateY: 0, scale: 0.5 }} transition={compactMode ? { type: 'timing', duration: 250, delay: action.delay } : { type: 'spring', damping: 20, stiffness: 150, delay: action.delay }} style={styles.actionBtnWrapper}><Text style={styles.actionLabel}>{action.label}</Text><TouchableOpacity style={[styles.actionBtn, { backgroundColor: action.color }]} onPress={() => {setIsOpen(false);Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);if (action.label === 'Tarea') {(navigation as any).resetModal && (navigation as any).resetModal('task');} else if (action.label === 'Nuevo Memo') {(navigation as any).resetModal && (navigation as any).resetModal('memo');} else if (action.label === 'Escanear') {navigation.navigate('Cortex IA');}} }><action.icon color="#FFF" size={20} /></TouchableOpacity></MotiView>))}
-            </>
-          )}
-        </AnimatePresence>
-
         <MotiView
           from={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={compactMode ? { type: 'timing', duration: 300, delay: 500 } : { type: 'spring', damping: 15, stiffness: 120, delay: 800 }}
         >
+          {/* Pulsing Aura */}
+          <MotiView
+            from={{ scale: 0.9, opacity: 0.6 }}
+            animate={{ scale: 1.4, opacity: 0 }}
+            transition={{ type: 'timing', duration: 2500, loop: true }}
+            style={[StyleSheet.absoluteFill, { backgroundColor: theme.primary, borderRadius: 30 }]}
+          />
+
           <TouchableOpacity
             style={styles.fabContainer}
             activeOpacity={0.8}
-            onPress={toggleMenu}
+            onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                navigation.navigate('Cortex IA');
+            }}
           >
             <LinearGradient
-              colors={['#FFA07A', '#FF5A5F']}
+              colors={[theme.primary, theme.primary + '90']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.fabGradient}
+              style={[styles.fabGradient, { overflow: 'hidden' }]}
             >
-              {/* Inner white glow / clarity */}
-              <View style={[StyleSheet.absoluteFill, { borderRadius: 30, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)' }]} />
-              <LinearGradient
-                colors={['rgba(255,255,255,0.8)', 'transparent', 'transparent']}
-                start={{ x: 0.2, y: 0.2 }}
-                end={{ x: 0.8, y: 0.8 }}
-                style={[StyleSheet.absoluteFill, { borderRadius: 30 }]}
-              />
+              <View style={[StyleSheet.absoluteFill, { borderRadius: 30, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)', zIndex: 2 }]} />
+              
+              {/* Sweeping Shine */}
               <MotiView
-                animate={{ rotate: isOpen ? '45deg' : '0deg' }}
-                transition={{ type: 'timing', duration: 250 }}
+                from={{ translateX: -60, skewX: '-20deg' }}
+                animate={{ translateX: 80, skewX: '-20deg' }}
+                transition={{ type: 'timing', duration: 3000, loop: true, repeatReverse: false }}
+                style={{ position: 'absolute', top: 0, bottom: 0, width: 25, backgroundColor: 'rgba(255,255,255,0.3)', zIndex: 1 }}
+              />
+
+              <MotiView
+                 from={{ scale: 0.92 }}
+                 animate={{ scale: 1.08 }}
+                 transition={{ type: 'timing', duration: 1500, loop: true, direction: 'alternate' }}
+                 style={{ zIndex: 3 }}
               >
-                <Plus color="#FFF" size={28} strokeWidth={2.5} />
+                 <Brain color="#FFF" size={26} strokeWidth={2.2} />
               </MotiView>
             </LinearGradient>
           </TouchableOpacity>
@@ -232,6 +215,7 @@ function CoursesNav() {
 
 function SettingsNav({ onLogout }: { onLogout: () => void }) {
   const { theme } = useTheme();
+  const renderSettingsMenu = React.useCallback((props: any) => <SettingsScreen {...props} onLogout={onLogout} />, [onLogout]);
   return (
     <SettingsStack.Navigator
       screenOptions={{
@@ -244,9 +228,7 @@ function SettingsNav({ onLogout }: { onLogout: () => void }) {
         animationDuration: 260,
       }}
     >
-      <SettingsStack.Screen name="SettingsMain" options={{ title: 'Ajustes' }}>
-        {(props) => <SettingsScreen {...props} onLogout={onLogout} />}
-      </SettingsStack.Screen>
+      <SettingsStack.Screen name="SettingsMain" children={renderSettingsMenu} />
       <SettingsStack.Screen
         name="Cortex IA"
         component={NexusScreen}
@@ -259,8 +241,6 @@ function SettingsNav({ onLogout }: { onLogout: () => void }) {
 function Sidebar({ onLogout, navigation }: { onLogout: () => void; navigation: any }) {
   const { theme } = useTheme();
   const isDark = theme.isDark;
-  
-  // Custom state for Sidebar navigation (local tracking since we are siblings)
   const [activeIndex, setActiveIndex] = useState(0);
 
   const routes = [
@@ -286,7 +266,6 @@ function Sidebar({ onLogout, navigation }: { onLogout: () => void; navigation: a
           const isFocused = activeIndex === index;
           const onPress = () => {
              setActiveIndex(index);
-             // Use nested navigation to target the Tab Navigator inside 'Main'
              navigation.navigate('Main', { screen: route.name });
           };
 
@@ -370,10 +349,10 @@ function MainTabs({ onLogout, navigation }: { onLogout: () => void; navigation: 
             }}
           />
           <Tab.Screen
-            name="Cortex IA"
-            component={NexusScreen}
+            name="Académico"
+            component={AcademicScreen}
             options={{
-              tabBarIcon: ({ color, size }) => <Target size={size} color={color} />,
+              tabBarIcon: ({ color, size }) => <GraduationCap size={size} color={color} />,
             }}
           />
           <Tab.Screen
@@ -414,28 +393,25 @@ function MainTabs({ onLogout, navigation }: { onLogout: () => void; navigation: 
 
 function RootNavigator({ onLogout }: { onLogout: () => void }) {
   const { theme } = useTheme();
+  
+  const renderMainTabs = React.useCallback((props: any) => <MainTabs {...props} onLogout={onLogout} />, [onLogout]);
+  const renderSettingsNav = React.useCallback((props: any) => <SettingsNav {...props} onLogout={onLogout} />, [onLogout]);
+
   return (
     <RootStack.Navigator screenOptions={{ 
       headerShown: false, 
       animation: 'fade', 
       animationDuration: 250,
-      contentStyle: { backgroundColor: theme.bg } // CORRECTION: Forces the real background so it never flashes white/grey
+      contentStyle: { backgroundColor: theme.bg } 
     }}>
-      <RootStack.Screen name="Main">
-        {(props: any) => <MainTabs {...props} onLogout={onLogout} />}
-      </RootStack.Screen>
-      <RootStack.Screen name="Settings">
-        {() => <SettingsNav onLogout={onLogout} />}
-      </RootStack.Screen>
+      <RootStack.Screen name="Main" children={renderMainTabs} />
+      <RootStack.Screen name="Settings" children={renderSettingsNav} />
       <RootStack.Screen name="Academic" component={AcademicScreen} />
       <RootStack.Screen name="CommunicationsHub" component={CommunicationsHub} />
       <RootStack.Screen name="Calendar" component={CalendarScreen} />
-      <RootStack.Screen name="CourseDetail">
-        {(props: any) => <CourseDetailScreen {...props} />}
-      </RootStack.Screen>
-      <RootStack.Screen name="Permissions">
-        {(props: any) => <PermissionsScreen {...props} />}
-      </RootStack.Screen>
+      <RootStack.Screen name="CourseDetail" component={CourseDetailScreen} />
+      <RootStack.Screen name="Permissions" component={PermissionsScreen} />
+      <RootStack.Screen name="Cortex IA" component={NexusScreen} />
     </RootStack.Navigator>
   );
 }
@@ -447,14 +423,23 @@ export default function AppNavigator() {
   const [isGuest, setIsGuest] = useState(false);
   const { theme } = useTheme();
   const { userProfile, isLoading, authUser: user } = useData();
-  
-  // Eliminar useEffect local de authListener
 
+  const handleLogout = React.useCallback(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setLobbyMessage('¡Ya te vas amix, nos vemos!!');
+      setShowLobby(true);
+      
+      setTimeout(() => {
+          setAuthState('LOCK');
+          setIsGuest(false);
+          setTimeout(() => setShowLobby(false), 1000);
+      }, 5000);
+  }, []);
+  
   const lastPressRef = React.useRef(0);
 
   React.useEffect(() => {
     const handleBackPress = () => {
-      // Solo actuar si estamos en el estado principal APP
       if (authState !== 'APP') return false;
 
       const now = Date.now();
@@ -474,7 +459,6 @@ export default function AppNavigator() {
     return () => backHandler.remove();
   }, [authState]);
 
-  // Sincronización proactiva de metadatos para "Cuenta Reciente"
   React.useEffect(() => {
     if (userProfile && !isLoading && !isGuest && auth.currentUser) {
       const syncMeta = async () => {
@@ -491,9 +475,7 @@ export default function AppNavigator() {
             lastActive: Date.now()
           };
           await AsyncStorage.setItem('@last_user', JSON.stringify(data));
-        } catch (e) {
-          // console.log("Error syncing session meta:", e);
-        }
+        } catch (e) {}
       };
       syncMeta();
     }
@@ -504,7 +486,6 @@ export default function AppNavigator() {
 
     if (!user && !isGuest) {
       setAuthState('LOCK');
-      // No ocultamos el lobby si es un mensaje de despedida en curso
       if (!lobbyMessage.includes('vas')) {
         setShowLobby(false);
       }
@@ -514,34 +495,27 @@ export default function AppNavigator() {
       const next: AuthState = (hasOnboarding || isLegacyUser) && !isGuest ? 'APP' : 'ONBOARDING';
 
       if (authState === 'LOCK') {
-          // Transición desde login -> APP/Onboarding
           setLobbyMessage('¡Configurando tu experiencia inteligente! Preparando Cortex...');
           setShowLobby(true);
           setAuthState(next);
-          // El lobby se ocultará cuando la app esté montada (HomeScreen useEffect)
       } else if (authState === 'APP' && next === 'ONBOARDING') {
-          // BLOQUEO: Si ya estamos en la APP, no volvemos a Onboarding por fluctuaciones de datos
-          // console.log('Sync Guard: Ignorando petición de Onboarding tras reconexión.');
       } else if (authState !== next) {
           setAuthState(next);
       }
     }
   }, [userProfile, isLoading, user, isGuest, authState]);
 
-  // Hook para ocultar el lobby después de un tiempo prudencial
   React.useEffect(() => {
     if (showLobby && (authState === 'APP' || authState === 'ONBOARDING')) {
-      // 💡 REDUCED TIMEOUT: If we have cache, the transition should be faster
       const duration = userProfile ? 1500 : 3500; 
       const timer = setTimeout(() => {
         setShowLobby(false);
-        // console.log('📡 [Cortex Core] Lobby transition complete.');
       }, duration); 
       return () => clearTimeout(timer);
     }
   }, [showLobby, authState, !!userProfile]);
 
-  if (isLoading && !userProfile) { // 💡 Only block if we have NO profile (literally first boot)
+  if (isLoading && !userProfile) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.bg, justifyContent: 'center', alignItems: 'center' }}>
         <GlassLayers radius={0} />
@@ -562,7 +536,7 @@ export default function AppNavigator() {
     ...navTheme,
     colors: {
       ...navTheme.colors,
-      background: theme.bg, // CRITICAL: Forces generic navigator background to match Matte OS
+      background: theme.bg,
     },
   };
 
@@ -580,12 +554,9 @@ export default function AppNavigator() {
             style={{ flex: 1 }}
           >
             <AuthScreen 
-              onLogin={() => {
-                // El useEffect manejará la transición basada en el perfil
-              }} 
+              onLogin={() => {}} 
               onGuest={() => {
                 setIsGuest(true);
-                // El useEffect se encargará de activar el overlay al detectar isGuest
               }}
             />
           </MotiView>
@@ -623,21 +594,7 @@ export default function AppNavigator() {
             style={{ flex: 1, backgroundColor: theme.bg }}
           >
             <NavigationContainer theme={customNavTheme} ref={navigationRef}>
-              <RootNavigator onLogout={() => {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  setLobbyMessage('¡Ya te vas amix, nos vemos!!');
-                  setShowLobby(true);
-                  
-                  // El Telón (Curtain Effect): Esperamos 5s con el lobby arriba
-                  // El cambio de estado ocurre DESPUÉS de 4s para que la pantalla de Auth se monte detrás
-                  setTimeout(() => {
-                      setAuthState('LOCK');
-                      setIsGuest(false);
-                      
-                      // Finalmente ocultamos el lobby tras 1s extra de asentamiento
-                      setTimeout(() => setShowLobby(false), 1000);
-                  }, 5000);
-              }} />
+              <RootNavigator onLogout={handleLogout} />
             </NavigationContainer>
           </MotiView>
         )}

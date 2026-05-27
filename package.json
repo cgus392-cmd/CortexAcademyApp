@@ -1,6 +1,6 @@
 {
   "name": "cortex-hub-os",
-  "version": "1.0.0",
+  "version": "1.7.0",
   "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -26,8 +26,10 @@
     "expo": "~55.0.13",
     "expo-application": "~55.0.10",
     "expo-auth-session": "~55.0.10",
+    "expo-av": "^16.0.8",
     "expo-blur": "~55.0.10",
     "expo-build-properties": "^55.0.13",
+    "expo-clipboard": "~55.0.13",
     "expo-constants": "~55.0.9",
     "expo-document-picker": "~55.0.11",
     "expo-file-system": "~55.0.16",
@@ -42,6 +44,7 @@
     "expo-router": "~55.0.11",
     "expo-secure-store": "~55.0.13",
     "expo-sharing": "~55.0.18",
+    "expo-speech": "~55.0.14",
     "expo-status-bar": "~55.0.5",
     "expo-system-ui": "~55.0.15",
     "expo-updates": "~55.0.20",

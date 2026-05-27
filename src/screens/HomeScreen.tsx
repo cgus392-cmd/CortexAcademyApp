@@ -13,6 +13,7 @@ import {
   Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   Search, 
   Settings, 
@@ -37,10 +38,13 @@ import {
   MoreHorizontal,
   Award,
   Brain,
-  Paperclip
+  Paperclip,
+  X
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as Application from 'expo-application';
+import { isUpdateAvailable } from '../utils/versionCheck';
 import { MotiView, AnimatePresence } from 'moti';
 import { Colors, Spacing, Radius, Shadows } from '../constants/theme';
 import CleanBackground from '../components/CleanBackground';
@@ -134,8 +138,28 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
     notifications,
     addNotification,
     globalConfig,
+    updateGlobalConfig,
     isAdmin
   } = useData();
+
+  useEffect(() => {
+    // SCRIPT DE ACTUALIZACION TEMPORAL - FIREBASE
+    if (updateGlobalConfig) {
+      updateGlobalConfig({
+        currentVersion: '1.6.0',
+        releaseDate: new Date().toLocaleDateString(),
+        releaseSize: '32.5 MB',
+        releaseNotes: [
+          'Nuevo diseño del Botón Inteligente Cortex IA.',
+          'Tooltips interactivos en las métricas de rendimiento.',
+          'Rediseño del centro Académico en la barra de navegación.',
+          'Corrección de errores y optimización profunda del motor.'
+        ]
+      });
+      console.log('Firebase globalConfig actualizado exitosamente a v1.6.0');
+    }
+  }, []);
+
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSyncSuccess, setShowSyncSuccess] = useState(false);
   const [showManual, setShowManual] = useState(false);
@@ -150,19 +174,37 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
   const pendingTasks = tasks.filter(t => !t.done).length;
   const handleScroll = useScrollToHideTabBar(40);
 
-   const [showQRModal, setShowQRModal] = React.useState(false);
-  const [showCarnetModal, setShowCarnetModal] = React.useState(false);
+   const [showQRModal, setShowQRModal] = useState(false);
+  const [showCarnetModal, setShowCarnetModal] = useState(false);
+  const [dismissedAnnouncement, setDismissedAnnouncement] = useState<string | null>(null);
   const [showCortexModal, setShowCortexModal] = React.useState(false);
   const [modalType, setModalType] = React.useState<any>(null);
   const [selectedMemo, setSelectedMemo] = React.useState<any>(null);
+  
+  // Collapse state for agenda in compact mode
+  const { compactMode } = theme;
+  const [isAgendaExpanded, setIsAgendaExpanded] = useState(!compactMode);
+  
+  useEffect(() => {
+    // Si cambia el modo, se actualiza el estado de la agenda por defecto
+    setIsAgendaExpanded(!compactMode);
+  }, [compactMode]);
 
   let parsedNotes: any[] = [];
   try {
     parsedNotes = typeof notes === 'string' ? JSON.parse(notes) : notes;
-    if (!Array.isArray(parsedNotes)) parsedNotes = [];
+    if (!Array.isArray(parsedNotes)) {
+        parsedNotes = [];
+    }
   } catch (e) {
     if (notes) parsedNotes = [{ id: '1', text: notes, color: theme.primary + '20' }];
   }
+
+  React.useEffect(() => {
+    AsyncStorage.getItem('CORTEX_DISMISSED_ANNOUNCEMENT').then(dismissed => {
+        if (dismissed) setDismissedAnnouncement(dismissed);
+    });
+  }, []);
 
   // --- GLOBAL ACADEMIC ENGINE REFINEMENT (CortexCore 3.1) ---
   const [isAccumulatedGlobalView, setIsAccumulatedGlobalView] = useState(false);
@@ -216,7 +258,6 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
   const fallbackPhotoURL = userProfile?.fallbackPhotoURL || (domain ? getUniversityLogo(domain) : null);
   const initial = userName.charAt(0).toUpperCase();
   const photoURL = userProfile?.photoURL;
-  const { compactMode } = theme;
 
   if (isLoading) {
     return (
@@ -323,12 +364,15 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
     ]);
   }, [startTutorial, userName, addNotification]);
 
+  const hasTriggeredTutorial = React.useRef(false);
+
   React.useEffect(() => {
-    if (!isLoading && isDataFresh && userProfile && !userProfile.tutorialCompleted) {
+    if (!isLoading && isDataFresh && userProfile && !userProfile.tutorialCompleted && !hasTriggeredTutorial.current) {
+      hasTriggeredTutorial.current = true;
       const timer = setTimeout(triggerTutorial, 2500);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, isDataFresh, userProfile, userProfile?.tutorialCompleted, triggerTutorial]);
+  }, [isLoading, isDataFresh, userProfile, triggerTutorial]);
 
   // Manejador del éxito de sincronización
   useEffect(() => {
@@ -597,7 +641,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
         <View style={styles.maxWidthWrapper}>
           {/* ---------- GLOBAL ANNOUNCEMENT / UPDATE BANNER ---------- */}
           <AnimatePresence>
-            {globalConfig?.announcement?.active && (
+            {globalConfig?.announcement?.active && globalConfig.announcement.title !== dismissedAnnouncement && (
               <MotiView
                 from={{ height: 0, opacity: 0, scale: 0.95, marginBottom: 0 }}
                 animate={{ height: 'auto', opacity: 1, scale: 1, marginBottom: 20 }}
@@ -605,13 +649,14 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                 transition={{ type: 'timing', duration: 400 }}
                 style={{ overflow: 'hidden', paddingHorizontal: 20 }}
               >
-                <TouchableOpacity 
-                   activeOpacity={0.8}
-                   onPress={() => {
-                     if (globalConfig.updateUrl) Linking.openURL(globalConfig.updateUrl);
-                   }}
-                >
-                  <MatteCard radius={22} style={[styles.announcementCard, { borderColor: globalConfig.announcement.type === 'warning' ? '#FF5A5F60' : theme.primary + '40' }]}>
+                <MatteCard radius={22} style={[styles.announcementCard, { borderColor: globalConfig.announcement.type === 'warning' ? '#FF5A5F60' : theme.primary + '40', flexDirection: 'row', alignItems: 'center' }]}>
+                  <TouchableOpacity 
+                     activeOpacity={0.8}
+                     onPress={() => {
+                       if (globalConfig.updateUrl) Linking.openURL(globalConfig.updateUrl);
+                     }}
+                     style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
+                  >
                     <LinearGradient
                       colors={globalConfig.announcement.type === 'warning' ? ['#FF5A5F20', 'transparent'] : [theme.primary + '20', 'transparent']}
                       style={StyleSheet.absoluteFill}
@@ -625,13 +670,23 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                       <Text style={styles.announcementTitle}>{globalConfig.announcement.title}</Text>
                       <Text style={styles.announcementBody}>{globalConfig.announcement.body}</Text>
                     </View>
-                    <ChevronRight size={18} color={theme.textMuted} />
-                  </MatteCard>
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                      style={{ padding: 10, marginLeft: 5, zIndex: 10 }} 
+                      onPress={async () => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setDismissedAnnouncement(globalConfig.announcement.title);
+                          await AsyncStorage.setItem('CORTEX_DISMISSED_ANNOUNCEMENT', globalConfig.announcement.title);
+                      }}
+                  >
+                      <X size={20} color={theme.textMuted} />
+                  </TouchableOpacity>
+                </MatteCard>
               </MotiView>
             )}
 
-            {globalConfig?.currentVersion && globalConfig.currentVersion !== '3.1.0' && (
+            {globalConfig?.currentVersion && isUpdateAvailable(globalConfig.currentVersion, Application.nativeApplicationVersion || '1.0.0') && (
               <MotiView
                 from={{ height: 0, opacity: 0, scale: 0.95 }}
                 animate={{ height: 'auto', opacity: 1, scale: 1 }}
@@ -666,8 +721,8 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                 >
                   <View style={{
                     backgroundColor: theme.isDark ? '#1C1C1E' : '#FFFFFF',
-                    borderRadius: 28,
-                    padding: 16,
+                    borderRadius: compactMode ? 20 : 28,
+                    padding: compactMode ? 12 : 16,
                     justifyContent: 'space-between',
                     flex: 1,
                     shadowColor: '#000',
@@ -680,20 +735,25 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                   }}>
                     {/* Top Header Row */}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: theme.textSecondary, letterSpacing: 0.5 }}>
-                           {displayLabel}
-                        </Text>
-                       <Target size={16} color={theme.text} strokeWidth={2.5} />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: compactMode ? 9 : 10, fontWeight: '800', color: theme.textSecondary, letterSpacing: 0.5 }}>
+                               {displayLabel}
+                            </Text>
+                            <TouchableOpacity hitSlop={{top:10, bottom:10, left:10, right:10}} onPress={() => Alert.alert('Promedio', 'Es el promedio calculado de tus calificaciones parciales o globales en el semestre actual.')}>
+                                <HelpCircle size={compactMode ? 14 : 16} color="#F59E0B" strokeWidth={2} />
+                            </TouchableOpacity>
+                        </View>
+                       <Target size={compactMode ? 14 : 16} color={theme.text} strokeWidth={2.5} />
                     </View>
                     
                     {/* Bottom Data Row */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10 }}>
-                      <View style={{ gap: 2 }}>
-                         <Text style={{ fontSize: 26, fontWeight: '800', color: theme.text, letterSpacing: -1 }}>{displayValue}</Text>
-                         <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textMuted }}>{!isRedundant ? 'Doble-Tap para alternar' : 'Datos sincronizados'}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: compactMode ? 6 : 10 }}>
+                      <View style={{ gap: 2, flex: 1, paddingRight: 8 }}>
+                         <Text style={{ fontSize: compactMode ? 22 : 26, fontWeight: '800', color: theme.text, letterSpacing: -1 }}>{displayValue}</Text>
+                         <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: compactMode ? 9 : 10, fontWeight: '600', color: theme.textMuted }}>{!isRedundant ? 'Doble-Tap para alternar' : 'Datos sincronizados'}</Text>
                       </View>
 
-                      <View style={{ width: 60, height: 8, borderRadius: 4, backgroundColor: theme.isDark ? '#333' : '#F0F0F0', overflow: 'hidden' }}>
+                      <View style={{ width: compactMode ? 50 : 60, height: compactMode ? 6 : 8, borderRadius: compactMode ? 3 : 4, backgroundColor: theme.isDark ? '#333' : '#F0F0F0', overflow: 'hidden' }}>
                          <LinearGradient colors={['#FF5A5F', '#F59E0B', '#10B981']} start={{x:0, y:0}} end={{x:1, y:0}} style={StyleSheet.absoluteFill} />
                          <View style={{ 
                            position: 'absolute', width: 6, height: 12, top: -2, borderRadius: 3, 
@@ -720,8 +780,8 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                 >
                   <View style={{
                     backgroundColor: theme.isDark ? '#1C1C1E' : '#FFFFFF',
-                    borderRadius: 28,
-                    padding: 16,
+                    borderRadius: compactMode ? 20 : 28,
+                    padding: compactMode ? 12 : 16,
                     justifyContent: 'space-between',
                     flex: 1,
                     shadowColor: '#000',
@@ -733,15 +793,20 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                     borderColor: 'rgba(255,255,255,0.05)'
                   }}>
                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>Eficiencia</Text>
-                        <Zap size={18} color={theme.text} strokeWidth={2.5} />
-                     </View>
-                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 16 }}>
-                        <View style={{ gap: 2 }}>
-                           <Text style={{ fontSize: 26, fontWeight: '800', color: theme.text, letterSpacing: -1 }}>{AcademicEngine.calculateEfficiency(courses)}%</Text>
-                           <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>{AcademicEngine.calculateEfficiency(courses) >= 80 ? 'Excelente' : 'Mejorable'}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: compactMode ? 11 : 13, fontWeight: '700', color: theme.text }}>Eficiencia</Text>
+                            <TouchableOpacity hitSlop={{top:10, bottom:10, left:10, right:10}} onPress={() => Alert.alert('Eficiencia Total', 'Porcentaje promedio de avance y completitud de tus materias en el corte actual.')}>
+                                <HelpCircle size={compactMode ? 14 : 16} color="#F59E0B" strokeWidth={2} />
+                            </TouchableOpacity>
                         </View>
-                        <View style={{ width: 65, height: 8, borderRadius: 4, backgroundColor: theme.isDark ? '#333' : '#F0F0F0', overflow: 'hidden' }}>
+                        <Zap size={compactMode ? 16 : 18} color={theme.text} strokeWidth={2.5} />
+                     </View>
+                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: compactMode ? 8 : 16 }}>
+                        <View style={{ gap: 2 }}>
+                           <Text style={{ fontSize: compactMode ? 22 : 26, fontWeight: '800', color: theme.text, letterSpacing: -1 }}>{AcademicEngine.calculateEfficiency(courses)}%</Text>
+                           <Text style={{ fontSize: compactMode ? 10 : 11, fontWeight: '600', color: theme.textSecondary }}>{AcademicEngine.calculateEfficiency(courses) >= 80 ? 'Excelente' : 'Mejorable'}</Text>
+                        </View>
+                        <View style={{ width: compactMode ? 55 : 65, height: compactMode ? 6 : 8, borderRadius: compactMode ? 3 : 4, backgroundColor: theme.isDark ? '#333' : '#F0F0F0', overflow: 'hidden' }}>
                            <View style={{ width: `${AcademicEngine.calculateEfficiency(courses)}%`, height: '100%', backgroundColor: theme.accent, borderRadius: 4 }} />
                         </View>
                      </View>
@@ -759,7 +824,8 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                   subtext: AcademicEngine.calculateRiskCourses(courses) > 0 ? 'Peligro' : 'Seguro',
                   color: theme.text, 
                   icon: AlertTriangle,
-                  type: 'alert'
+                  type: 'alert',
+                  info: 'Cantidad de materias que actualmente se encuentran por debajo de la nota aprobatoria (3.0).'
                 },
                 { 
                   label: 'Tareas', 
@@ -767,7 +833,8 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                   subtext: pendingTasks > 0 ? 'Pendientes' : 'Al día',
                   color: theme.text, 
                   icon: Sparkles,
-                  type: 'info'
+                  type: 'info',
+                  info: 'Total de tareas y pendientes activos que aún no has marcado como completados.'
                 },
               ].map((stat, i) => (
                 
@@ -780,8 +847,8 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                   >
                     <View style={{
                         backgroundColor: theme.isDark ? '#1C1C1E' : '#FFFFFF',
-                        borderRadius: 28,
-                        padding: 16,
+                        borderRadius: compactMode ? 20 : 28,
+                        padding: compactMode ? 12 : 16,
                         justifyContent: 'space-between',
                         flex: 1,
                         shadowColor: '#000',
@@ -793,20 +860,25 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                         borderColor: 'rgba(255,255,255,0.05)'
                     }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                           <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>{stat.label}</Text>
-                           <stat.icon size={18} color={theme.text} strokeWidth={2.5} />
+                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                               <Text style={{ fontSize: compactMode ? 11 : 13, fontWeight: '700', color: theme.text }}>{stat.label}</Text>
+                               <TouchableOpacity hitSlop={{top:10, bottom:10, left:10, right:10}} onPress={() => Alert.alert(stat.label, stat.info)}>
+                                   <HelpCircle size={compactMode ? 14 : 16} color="#F59E0B" strokeWidth={2} />
+                               </TouchableOpacity>
+                           </View>
+                           <stat.icon size={compactMode ? 16 : 18} color={theme.text} strokeWidth={2.5} />
                         </View>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 16 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: compactMode ? 8 : 16 }}>
                           <View style={{ gap: 2 }}>
-                             <Text style={{ fontSize: 26, fontWeight: '800', color: theme.text, letterSpacing: -1 }}>{stat.value}</Text>
-                             <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>{stat.subtext}</Text>
+                             <Text style={{ fontSize: compactMode ? 22 : 26, fontWeight: '800', color: theme.text, letterSpacing: -1 }}>{stat.value}</Text>
+                             <Text style={{ fontSize: compactMode ? 10 : 11, fontWeight: '600', color: theme.textSecondary }}>{stat.subtext}</Text>
                           </View>
                           {stat.type === 'alert' ? (
-                             <View style={{ width: 65, height: 8, borderRadius: 4, backgroundColor: theme.isDark ? '#333' : '#F0F0F0', overflow: 'hidden' }}>
+                             <View style={{ width: compactMode ? 55 : 65, height: compactMode ? 6 : 8, borderRadius: compactMode ? 3 : 4, backgroundColor: theme.isDark ? '#333' : '#F0F0F0', overflow: 'hidden' }}>
                                 <View style={{ width: AcademicEngine.calculateRiskCourses(courses) > 0 ? '80%' : '15%', height: '100%', backgroundColor: AcademicEngine.calculateRiskCourses(courses) > 0 ? '#FF5A5F' : '#10B981', borderRadius: 4 }} />
                              </View>
                           ) : (
-                             <View style={{ width: 65, height: 8, borderRadius: 4, backgroundColor: theme.isDark ? '#333' : '#F0F0F0', overflow: 'hidden' }}>
+                             <View style={{ width: compactMode ? 55 : 65, height: compactMode ? 6 : 8, borderRadius: compactMode ? 3 : 4, backgroundColor: theme.isDark ? '#333' : '#F0F0F0', overflow: 'hidden' }}>
                                 <View style={{ width: pendingTasks > 0 ? '60%' : '100%', height: '100%', backgroundColor: theme.primary, borderRadius: 4 }} />
                              </View>
                           )}
@@ -881,7 +953,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
           >
           {parsedNotes.map((memo: any, i: number) => (
             <MotiView
-              key={memo.id}
+              key={memo.id || `memo-inner-${i}`}
               from={{ opacity: 0, scale: 0.9, translateX: 40 }}
               animate={{ opacity: 1, scale: 1, translateX: 0 }}
               transition={{ delay: BASE_DELAY + 560 + i * 90 }}
@@ -918,7 +990,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.coursesWrapper}>
           {courses.map((course: any, i: number) => (
             <MotiView 
-              key={course.id} 
+              key={course.id || `course-inner-${i}`} 
               from={{ opacity: 0, translateX: 30 }} 
               animate={{ opacity: 1, translateX: 0 }} 
               transition={{ delay: BASE_DELAY + 640 + i * 80 }}
@@ -938,18 +1010,55 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
         </ScrollView>
         
 
-        
-        <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: BASE_DELAY + 620 }}><TouchableOpacity style={styles.sectionHeader} activeOpacity={0.7} onPress={() => {Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);navigation.navigate('Calendar');}}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.sectionTitle}>Mi Agenda</Text><Text style={styles.sectionLabel}>{todayBlocks.length} Items</Text></View><Calendar size={18} color={theme.textSecondary} /></TouchableOpacity></MotiView>
+        <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: BASE_DELAY + 620 }}>
+            <TouchableOpacity 
+              style={[styles.sectionHeader, { paddingVertical: compactMode ? 4 : 8 }]} 
+              activeOpacity={0.7} 
+              onPress={() => {
+                if (compactMode) {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setIsAgendaExpanded(!isAgendaExpanded);
+                } else {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  navigation.navigate('Calendar');
+                }
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.sectionTitle}>Mi Agenda</Text>
+                <Text style={styles.sectionLabel}>{todayBlocks.length} Items</Text>
+              </View>
+              {compactMode ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>{isAgendaExpanded ? 'Ocultar' : 'Ver'}</Text>
+                    <ChevronRight size={18} color={theme.textSecondary} style={{ transform: [{ rotate: isAgendaExpanded ? '-90deg' : '90deg' }] }} />
+                </View>
+              ) : (
+                <Calendar size={18} color={theme.textSecondary} />
+              )}
+            </TouchableOpacity>
+        </MotiView>
 
-        <View style={styles.agendaList}>
-          {todayBlocks.length === 0 ? (
-            <MatteCard radius={24} style={styles.emptyDay}>
-              <Text style={styles.emptyDayText}>Dia libre hoy. Disfruta.</Text>
-            </MatteCard>
-          ) : (
-            todayBlocks.map((block, i) => <AgendaGlassCard key={block.id} block={block} index={i} />)
+        <AnimatePresence>
+          {isAgendaExpanded && (
+            <MotiView
+                from={{ opacity: 0, height: 0, translateY: -10 }}
+                animate={{ opacity: 1, height: 'auto', translateY: 0 }}
+                exit={{ opacity: 0, height: 0, translateY: -10 }}
+                transition={{ type: 'timing', duration: 250 }}
+            >
+                <View style={[styles.agendaList, compactMode && { marginTop: 4, gap: 8 }]}>
+                {todayBlocks.length === 0 ? (
+                    <MatteCard radius={compactMode ? 16 : 24} style={[styles.emptyDay, compactMode && { padding: 12 }]}>
+                    <Text style={styles.emptyDayText}>Dia libre hoy. Disfruta.</Text>
+                    </MatteCard>
+                ) : (
+                    todayBlocks.map((block, i) => <AgendaGlassCard key={block.id || `block-${i}`} block={block} index={i} />)
+                )}
+                </View>
+            </MotiView>
           )}
-        </View>
+        </AnimatePresence>
         
 
         
@@ -965,7 +1074,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
 
         {tasks.slice(0, 2).map((task: any, i: number) => (
           <MotiView
-            key={task.id}
+            key={task.id || `task-${i}`}
             from={{ opacity: 0, translateY: 20 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ delay: BASE_DELAY + 820 + i * 100 }}
@@ -996,52 +1105,69 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                   {/* Top Tags Row */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <View style={{ flexDirection: 'row', gap: 6 }}>
-                      {(task.priority === 'high' || i === 0) && (
-                        <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(255, 90, 95, 0.06)', borderWidth: 1, borderColor: 'rgba(255, 90, 95, 0.2)' }}>
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#FF5A5F' }}>High</Text>
-                        </View>
-                      )}
+                      {(() => {
+                        const prio = task.priority?.toLowerCase() || (i === 0 ? 'high' : 'medium');
+                        let color = theme.textSecondary;
+                        let bgColor = theme.isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6';
+                        let borderColor = 'rgba(0,0,0,0.03)';
+                        let label = 'Media';
+                        
+                        if (prio === 'high') {
+                          color = '#FF5A5F';
+                          bgColor = 'rgba(255, 90, 95, 0.06)';
+                          borderColor = 'rgba(255, 90, 95, 0.2)';
+                          label = 'Alta';
+                        } else if (prio === 'low') {
+                          color = '#10B981';
+                          bgColor = 'rgba(16, 185, 129, 0.06)';
+                          borderColor = 'rgba(16, 185, 129, 0.2)';
+                          label = 'Baja';
+                        }
+                        
+                        return (
+                          <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: bgColor, borderWidth: 1, borderColor }}>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color }}>{label}</Text>
+                          </View>
+                        );
+                      })()}
                       <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: theme.isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6', borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>Interaction</Text>
-                      </View>
-                      <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: theme.isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6', borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>Meeting</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>{task.subject || 'Actividad'}</Text>
                       </View>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: theme.isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6', borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' }}>
-                      <Paperclip size={12} color={theme.textSecondary} />
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary }}>2+</Text>
-                    </View>
+                    {task.attachments && task.attachments.length > 0 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: theme.isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6', borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' }}>
+                        <Paperclip size={12} color={theme.textSecondary} />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary }}>{task.attachments.length}</Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Title & Desc */}
                   <View style={{ gap: 6 }}>
                     <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text, letterSpacing: -0.3 }}>
-                      {task.text || "Dashboard Overview"}
+                      {task.text || "Sin título"}
                     </Text>
                     <Text style={{ fontSize: 13, fontWeight: '500', color: theme.textSecondary, lineHeight: 18 }} numberOfLines={2}>
-                      {task.description || "Refine the dashboard layout, improve color hierarchy, and unify all components."}
+                      {task.description || "Sin descripción proporcionada para esta tarea."}
                     </Text>
                   </View>
 
                   {/* Bottom Row / Footer */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 4 }}>
                     <Text style={{ fontSize: 14, fontWeight: '700', color: theme.text }}>
-                      {task.estimatedTime || "09:30 - 10:00"}
+                      {task.dueDate ? new Date(task.dueDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : (task.estimatedTime || "Pendiente")}
                     </Text>
                     <View style={{ flexDirection: 'row' }}>
-                      {[12, 45, 68].map((avatarId, idx) => (
-                        <View key={idx} style={{
-                          width: 30, height: 30, borderRadius: 15, 
-                          backgroundColor: '#E2E8F0',
-                          marginLeft: idx === 0 ? 0 : -12,
-                          borderWidth: 2, borderColor: theme.isDark ? '#1E1E1E' : '#FFFFFF',
-                          overflow: 'hidden',
-                          shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3
+                        <View style={{
+                          width: 32, height: 32, borderRadius: 10, 
+                          backgroundColor: theme.isDark ? 'rgba(255,255,255,0.1)' : '#F0F0F0',
+                          justifyContent: 'center', alignItems: 'center',
+                          borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
                         }}>
-                           <Image source={{uri: `https://i.pravatar.cc/100?img=${avatarId}`}} style={{width: '100%', height: '100%'}} />
+                           <Text style={{ fontSize: 13, fontWeight: '800', color: theme.text }}>
+                             {(task.subject || task.text || "T").substring(0, 2).toUpperCase()}
+                           </Text>
                         </View>
-                      ))}
                     </View>
                   </View>
 

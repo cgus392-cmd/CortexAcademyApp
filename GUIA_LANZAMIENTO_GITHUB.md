@@ -1,3 +1,4 @@
+
 # 🚀 Guía de Lanzamiento: Cortex Academy (.APK)
 
 Para que los botones de descarga que acabo de instalar en tu Landing Page funcionen, el archivo APK debe estar alojado en GitHub con una configuración específica. Sigue estos 5 pasos:

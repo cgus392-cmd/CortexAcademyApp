@@ -26,8 +26,9 @@ export interface User {
   maxGrade: number;
   minGrade: number;
   avatarEmoji: string;
-  selectedModel: 'flash' | 'pro';
-  aiPersonality: 'professional' | 'friendly' | 'technical';
+  selectedModel: 'flash' | 'pro' | '8b' | '70b';
+  aiProvider: 'gemini' | 'meta';
+  aiPersonality: 'technical' | 'smart' | 'friendly';
   accentColor: 'primary' | 'emerald' | 'rose' | 'amber' | 'royal';
   preferences: UserPreferences;
   completedAchievements: string[];

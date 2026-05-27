@@ -262,7 +262,7 @@ export default function CommunicationsHub({ navigation }: { navigation: any }) {
           ) : (
             filteredNotifications.map((notif, index) => (
               <MotiView
-                key={notif.id}
+                key={notif.id || `comm-notif-${index}`}
                 from={{ opacity: 0, translateY: 20, scale: 0.95 }}
                 animate={{ opacity: 1, translateY: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}

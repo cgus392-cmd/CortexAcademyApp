@@ -72,6 +72,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as RootNavigation from './src/navigation/RootNavigation';
 import GlobalBroadcast from './src/components/GlobalBroadcast';
 
+import UpdateManager from './src/components/UpdateManager';
+
 function AppRoot() {
   const { userProfile, isLoading, updateUserProfile, updatePushTokenImmediately, addNotification } = useData();
   const [isLocked, setIsLocked] = React.useState(false);
@@ -89,11 +91,7 @@ function AppRoot() {
           if (userProfile.expoPushToken !== token) {
             await updatePushTokenImmediately(token);
           }
-           // Local test to confirm engine
-           await Notifications.scheduleNotificationAsync({
-            content: { title: "Cortex OK ✅", body: "Motor de push activo." },
-            trigger: null,
-          });
+
         }
         console.log('-------------------------------------------');
       }
@@ -140,6 +138,7 @@ function AppRoot() {
     <View style={{ flex: 1 }}>
       <NetworkBanner />
       <GlobalBroadcast />
+      <UpdateManager />
       {isLocked ? (
         <CortexLock userName={userProfile?.name} onUnlock={() => setIsLocked(false)} />
       ) : (

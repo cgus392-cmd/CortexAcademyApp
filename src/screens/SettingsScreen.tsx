@@ -12,7 +12,11 @@ import {
   Linking,
   Modal,
   Platform,
+  KeyboardAvoidingView,
+  DeviceEventEmitter,
+  ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import logger from '../services/Logger';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,7 +63,9 @@ import {
   BookOpen, 
   Download, 
   Upload,
-  Terminal
+  Terminal,
+  DownloadCloud,
+  AlertTriangle
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { MotiView, AnimatePresence, MotiText } from 'moti';
@@ -80,27 +86,40 @@ import AccountCenterCard from '../components/AccountCenterCard';
 
 type SettingsView = 'menu' | 'profile' | 'appearance' | 'academic' | 'security' | 'ia' | 'support' | 'notifications' | 'account_hub' | 'backup' | 'feedback';
 
-export default function SettingsScreen({ navigation, onLogout }: { navigation: any; onLogout: () => void }) {
+export default function SettingsScreen({ navigation, route, onLogout }: { navigation: any; route?: any; onLogout: () => void }) {
   const insets = useSafeAreaInsets();
   const { theme, themeId, setTheme, darkMode, setDarkMode, updateAppearance } = useTheme();
   const styles = getStyles(theme);
-  const { userProfile, updateUserProfile } = useData();
+  const { userProfile, updateUserProfile, globalConfig } = useData();
   const profile = userProfile || {} as any;
 
-  const [currentView, setCurrentView] = useState<SettingsView>('menu');
+  const [currentView, setCurrentView] = useState<SettingsView>(route?.params?.view || 'menu');
   const [showManual, setShowManual] = useState(false);
   const [isModified, setIsModified] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // Estados locales para borrador
   const [name, setName] = useState(profile.name || '');
-  const [model, setModel] = useState<'flash' | 'pro'>(profile.selectedModel || 'flash');
-  const [personality, setPersonality] = useState<'friendly' | 'academic' | 'concise'>(profile.aiPersonality || 'friendly');
+  const [model, setModel] = useState<'flash' | 'pro' | '8b' | '70b'>(profile.selectedModel || 'flash');
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'meta'>(profile.aiProvider || 'gemini');
+  const [personality, setPersonality] = useState<'technical' | 'smart' | 'friendly'>(profile.aiPersonality || 'smart');
   const [isMemoryEnabled, setIsMemoryEnabled] = useState(profile.preferences?.contextMemory !== false);
   const [compactMode, setCompactMode] = useState(profile.preferences?.compactMode || false);
   const [notifications, setNotifications] = useState(profile.preferences?.notifications !== false);
+  const [uiScale, setUiScale] = useState<'small' | 'medium' | 'large' | 'auto'>(profile.preferences?.uiScale || 'auto');
   const [nebulaIntensity, setNebulaIntensity] = useState(profile.preferences?.nebulaIntensity || 0.8);
   const [glassOpacity, setGlassOpacity] = useState(profile.preferences?.glassOpacity || 0.15);
+  
+  // Sincronizar vista si viene por parámetros de navegación (Deep Linking)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (route?.params?.view) {
+        setCurrentView(route.params.view);
+        // Limpiar el parámetro para que no se repita al navegar internamente
+        navigation.setParams({ view: undefined });
+      }
+    }, [route?.params?.view])
+  );
   
   // Feedback Hub states
   const [feedbackMsg, setFeedbackMsg] = useState('');
@@ -138,6 +157,7 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
   const [accountActionType, setAccountActionType] = useState<'format' | 'delete' | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [farewellStep, setFarewellStep] = useState(0); // 0: Normal, 1: Goodbye message
+  const [deleteProgressText, setDeleteProgressText] = useState('');
 
   const match = findUniversityDomain(uniDomain);
 
@@ -145,6 +165,7 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
     if (userProfile) {
       setName(profile.name || '');
       setModel(profile.selectedModel || 'flash');
+      setAiProvider(profile.aiProvider || 'gemini');
       setPersonality(profile.aiPersonality || 'friendly');
       setUniDomain(profile.universityDomain || profile.domain || '');
       setCareer(profile.career || '');
@@ -158,6 +179,7 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
       if (profile.preferences) {
         setCompactMode(profile.preferences.compactMode || false);
         setNotifications(profile.preferences.notifications !== false);
+        setUiScale(profile.preferences.uiScale || 'auto');
         setNebulaIntensity(profile.preferences.nebulaIntensity || 0.8);
         setGlassOpacity(profile.preferences.glassOpacity || 0.15);
         setGlassBlur(profile.preferences.glassBlur || 20);
@@ -202,6 +224,7 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
     const updates = {
         name: name,
         selectedModel: model,
+        aiProvider: aiProvider,
         aiPersonality: personality,
         universityDomain: uniDomain,
         domain: uniDomain, // Mantener para compatibilidad
@@ -222,6 +245,7 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
             ...profile.preferences,
             compactMode,
             notifications,
+            uiScale,
             nebulaIntensity,
             glassOpacity,
             glassBlur,
@@ -287,11 +311,16 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
   };
 
   const handleFormatAccount = async () => {
-    // 0. Biometric Shield
-    const authResult = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Confirmar Formateo de Sistema',
-    });
-    if (!authResult.success) return;
+    // 0. Biometric Shield (Only if available and enrolled)
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+    
+    if (hasHardware && isEnrolled) {
+        const authResult = await LocalAuthentication.authenticateAsync({
+            promptMessage: 'Confirmar Formateo de Sistema',
+        });
+        if (!authResult.success) return;
+    }
 
     setIsDeleting(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -345,58 +374,69 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
   };
 
   const handleDeleteAccount = async () => {
-    // 0. Biometric Shield
-    const authResult = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Confirmar Purga de Datos (Eliminar Cuenta)',
-    });
-    if (!authResult.success) return;
+    // 0. Biometric Shield (Only if available and enrolled)
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+    if (hasHardware && isEnrolled) {
+        const authResult = await LocalAuthentication.authenticateAsync({
+            promptMessage: 'Confirmar Eliminación de Cuenta',
+        });
+        if (!authResult.success) return;
+    }
 
     setIsDeleting(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     
     try {
-        setFarewellStep(1); // Activar pantalla de despedida
-        await new Promise(r => setTimeout(r, 3000)); // Delay para que Corty se despida
+        setFarewellStep(1); 
+        setDeleteProgressText('Iniciando secuencia de borrado...');
+        await new Promise(r => setTimeout(r, 1000));
 
-        const uid = auth.currentUser?.uid;
-        if (!uid) throw new Error('No UID');
+        const currentUser = auth.currentUser;
+        if (!currentUser) throw new Error('No UID');
 
         // 1. Borrar de Firestore
-        await deleteDoc(doc(db, 'users', uid));
+        setDeleteProgressText('Eliminando registros de la base de datos...');
+        await deleteDoc(doc(db, 'users', currentUser.uid)).catch(() => {});
         
         // 2. Limpiar Caché Local
+        setDeleteProgressText('Limpiando memoria caché local...');
         const AsyncStorage = require('@react-native-async-storage/async-storage').default;
         await AsyncStorage.removeItem('@last_user');
         const SecureStore = require('expo-secure-store');
         await SecureStore.deleteItemAsync('user_creds');
 
         // 3. Borrar de Firebase Auth
-        await auth.currentUser?.delete();
+        setDeleteProgressText('Destruyendo cuenta de autenticación...');
+        await currentUser.delete();
         
+        setDeleteProgressText('¡Cuenta eliminada exitosamente! Adiós.');
+        await new Promise(r => setTimeout(r, 1500));
+
         setIsDeleting(false);
         onLogout();
     } catch (e: any) {
-        setIsDeleting(false);
-        setFarewellStep(0);
         if (e.code === 'auth/requires-recent-login') {
+            setDeleteProgressText('Se requiere re-autenticación por seguridad...');
+            await new Promise(r => setTimeout(r, 1500));
+            setIsDeleting(false);
+            setFarewellStep(0);
             Alert.alert(
                 'Seguridad Cortex', 
-                'Por seguridad, debes haber iniciado sesión recientemente para eliminar la cuenta. ¿Deseas re-autenticarte ahora?',
+                'Por seguridad, debes iniciar sesión nuevamente para confirmar que eres tú. Cerraremos tu sesión ahora para que puedas ingresar tu contraseña e intentarlo de nuevo.',
                 [
-                    { text: 'Cancelar', style: 'cancel' },
-                    { text: 'Re-autenticar', onPress: async () => {
-                        try {
-                            const { GoogleSignin } = require('@react-native-google-signin/google-signin');
-                            await GoogleSignin.signIn();
-                            Alert.alert('Éxito', 'Sesión re-validada. Intenta borrar la cuenta de nuevo.');
-                        } catch (err) {
-                            Alert.alert('Error', 'No se pudo re-autenticar.');
-                        }
-                    }}
+                    { text: 'Entendido', onPress: async () => {
+                        await auth.signOut();
+                        onLogout();
+                    } }
                 ]
             );
         } else {
-            Alert.alert('Error Crítico', 'No se pudo completar la purga: ' + e.message);
+            setDeleteProgressText(`Error al eliminar: ${e.message}`);
+            await new Promise(r => setTimeout(r, 3000));
+            setIsDeleting(false);
+            setFarewellStep(0);
         }
     }
   };
@@ -487,7 +527,16 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
 
   return (
     <CleanBackground overrideIntensity={nebulaIntensity}>
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + 20 }]}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 40}
+      >
+        <ScrollView 
+          style={styles.scroll} 
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + 20 }]}
+          keyboardShouldPersistTaps="handled"
+        >
         <AnimatePresence exitBeforeEnter>
           {currentView === 'menu' && (
             <MotiView 
@@ -542,7 +591,7 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
                 <MatteCard radius={30} style={{ padding: 4, marginBottom: 20 }}>
                     <SettingCell 
                         label="Perfil y Universidad" 
-                        subLabel={profile.institutionalEmail || 'unireformada.edu.co'}
+                        subLabel={profile.university || profile.universityDomain || profile.institutionalEmail || 'Configurar perfil'}
                         icon={<User size={20} strokeWidth={1.5} color={theme.text} />}
                         onPress={() => setCurrentView('profile')}
                     />
@@ -593,6 +642,14 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
                         onPress={() => {
                             Haptics.selectionAsync();
                             setShowManual(true);
+                        }} 
+                    />
+                    <SettingCell 
+                        label="Buscar Actualizaciones" 
+                        icon={<DownloadCloud size={20} strokeWidth={1.5} color={theme.text} />} 
+                        onPress={() => {
+                            Haptics.selectionAsync();
+                            DeviceEventEmitter.emit('trigger_update_check', { force: true });
                         }} 
                     />
                     <SettingCell 
@@ -1039,6 +1096,31 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
                             ))}
                         </View>
                     </View>
+                    <View style={styles.sliderBox}>
+                        <Text style={styles.sliderLabel}>Escala de Interfaz</Text>
+                        <Text style={styles.rowDesc}>Ajusta el tamaño global de los textos.</Text>
+                        <View style={styles.toggleRow}>
+                            {[
+                                {l:'Pequeña', v:'small'}, 
+                                {l:'Auto', v:'auto'}, 
+                                {l:'Media', v:'medium'}, 
+                                {l:'Grande', v:'large'}
+                            ].map((opt) => (
+                                <TouchableOpacity 
+                                    key={opt.l} 
+                                    onPress={() => { 
+                                        setUiScale(opt.v as any); 
+                                        setIsModified(true); 
+                                        updateAppearance({ uiScale: opt.v as any });
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); 
+                                    }} 
+                                    style={[styles.miniToggle, uiScale === opt.v && styles.miniToggleActive]}
+                                >
+                                    <Text style={[styles.miniToggleText, uiScale === opt.v && styles.miniToggleTextActive]}>{opt.l}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
                     <View style={styles.row}>
                         <View style={{ flex: 1 }}>
                             <View style={styles.rowLabelGroup}>
@@ -1115,17 +1197,73 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
                 <SubHeader title="Asistente IA" />
                 <MatteCard radius={Radius.lg}>
                     <View style={styles.sliderBox}>
-                        <Text style={styles.rowLabel}>Modelo Cortex</Text>
-                        <Text style={styles.rowDesc}>Flash para velocidad instantánea, Pro para razonamiento profundo.</Text>
+                        <Text style={styles.rowLabel}>Proveedor de Inteligencia</Text>
+                        <Text style={styles.rowDesc}>Elige el motor que potenciará tus consultas académicas.</Text>
                         <View style={[styles.toggleRow, { marginTop: 10 }]}>
-                            <TouchableOpacity onPress={() => { setModel('flash'); setIsModified(true); }} style={[styles.miniToggle, model === 'flash' && styles.miniToggleActive, { flex: 1 }]}>
-                                <Text style={[styles.miniToggleText, model === 'flash' && styles.miniToggleTextActive]}>Flash</Text>
-                                <Text style={{ fontSize: 8, color: model === 'flash' ? theme.primary : theme.textMuted, fontWeight: '700' }}>Velocidad</Text>
+                            <TouchableOpacity 
+                                onPress={() => { 
+                                    setAiProvider('gemini'); 
+                                    setModel('flash');
+                                    setIsModified(true); 
+                                    Haptics.selectionAsync();
+                                }} 
+                                style={[styles.miniToggle, aiProvider === 'gemini' && styles.miniToggleActive, { flex: 1 }]}
+                            >
+                                <Text style={[styles.miniToggleText, aiProvider === 'gemini' && styles.miniToggleTextActive]}>Google Gemini</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => { setModel('pro'); setIsModified(true); }} style={[styles.miniToggle, model === 'pro' && styles.miniToggleActive, { flex: 1 }]}>
-                                <Text style={[styles.miniToggleText, model === 'pro' && styles.miniToggleTextActive]}>Pro</Text>
-                                <Text style={{ fontSize: 8, color: model === 'pro' ? theme.primary : theme.textMuted, fontWeight: '700' }}>Inteligencia</Text>
+                            <TouchableOpacity 
+                                onPress={() => { 
+                                    setAiProvider('meta'); 
+                                    setModel('8b');
+                                    setIsModified(true); 
+                                    Haptics.selectionAsync();
+                                }} 
+                                style={[styles.miniToggle, aiProvider === 'meta' && styles.miniToggleActive, { flex: 1 }]}
+                            >
+                                <Text style={[styles.miniToggleText, aiProvider === 'meta' && styles.miniToggleTextActive]}>Meta Llama</Text>
                             </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    <View style={styles.sliderBox}>
+                        <Text style={styles.rowLabel}>Modelo Específico</Text>
+                        <Text style={styles.rowDesc}>
+                            {aiProvider === 'gemini' 
+                                ? 'Flash para velocidad, Pro para análisis avanzado.' 
+                                : 'Llama 3.1 8B para rapidez, Llama 3.3 70B para máximo poder.'}
+                        </Text>
+                        <View style={[styles.toggleRow, { marginTop: 10 }]}>
+                            {aiProvider === 'gemini' ? (
+                                <>
+                                    <TouchableOpacity 
+                                        onPress={() => { setModel('flash'); setIsModified(true); }} 
+                                        style={[styles.miniToggle, model === 'flash' && styles.miniToggleActive, { flex: 1 }]}
+                                    >
+                                        <Text style={[styles.miniToggleText, model === 'flash' && styles.miniToggleTextActive]}>Flash</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        onPress={() => { setModel('pro'); setIsModified(true); }} 
+                                        style={[styles.miniToggle, model === 'pro' && styles.miniToggleActive, { flex: 1 }]}
+                                    >
+                                        <Text style={[styles.miniToggleText, model === 'pro' && styles.miniToggleTextActive]}>Pro</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <TouchableOpacity 
+                                        onPress={() => { setModel('8b'); setIsModified(true); }} 
+                                        style={[styles.miniToggle, model === '8b' && styles.miniToggleActive, { flex: 1 }]}
+                                    >
+                                        <Text style={[styles.miniToggleText, model === '8b' && styles.miniToggleTextActive]}>Llama 3.1</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        onPress={() => { setModel('70b'); setIsModified(true); }} 
+                                        style={[styles.miniToggle, model === '70b' && styles.miniToggleActive, { flex: 1 }]}
+                                    >
+                                        <Text style={[styles.miniToggleText, model === '70b' && styles.miniToggleTextActive]}>Llama 3.3</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
                         </View>
                     </View>
 
@@ -1133,14 +1271,14 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
                         <Text style={styles.rowLabel}>Personalidad (Voz)</Text>
                         <Text style={styles.rowDesc}>Ajusta el tono de los consejos y proyecciones del Oráculo.</Text>
                         <View style={[styles.toggleRow, { marginTop: 10 }]}>
-                            {['friendly', 'academic', 'concise'].map((p) => (
+                            {['technical', 'smart', 'friendly'].map((p) => (
                                 <TouchableOpacity 
                                     key={p} 
                                     onPress={() => { setPersonality(p as any); setIsModified(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }} 
                                     style={[styles.miniToggle, personality === p && styles.miniToggleActive, { flex: 1 }]}
                                 >
                                     <Text style={[styles.miniToggleText, personality === p && styles.miniToggleTextActive]}>
-                                        {p === 'friendly' ? 'Relajado' : p === 'academic' ? 'Académico' : 'Directo'}
+                                        {p === 'technical' ? 'Técnico' : p === 'smart' ? 'Inteligente' : 'Amistoso'}
                                     </Text>
                                 </TouchableOpacity>
                             ))}
@@ -1158,15 +1296,22 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
                     <TouchableOpacity 
                         style={[styles.logoutBtn, { margin: 15, marginTop: 10, backgroundColor: 'rgba(255,255,255,0.02)' }]} 
                         onPress={() => {
-                            Alert.alert('Limpiar Cortex IA', '¿Deseas borrar permanentemente todo el historial de chat con la IA?', [
+                            Alert.alert('Limpiar Cortex IA', '¿Deseas borrar permanentemente todo el historial de chat con la IA? Esta acción limpiará tanto la nube como tu dispositivo.', [
                                 { text: 'Cancelar', style: 'cancel' },
                                 { text: 'Borrar todo', style: 'destructive', onPress: async () => {
                                     try {
+                                        // 1. Borrar historial en la raíz (usado por NexusScreen)
+                                        await db.collection('users').doc(auth.currentUser?.uid || '').set({ 
+                                            chatHistory: [] 
+                                        }, { merge: true });
+                                        
+                                        // 2. Borrar historial en userProfile (para consistencia total)
                                         await updateUserProfile({ chatHistory: [] });
+                                        
                                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                        Alert.alert('Historial Limpio', 'El historial de Cortex IA ha sido eliminado de la nube.');
+                                        Alert.alert('Historial Limpio', 'Cortex ha olvidado tus conversaciones pasadas en todos los dispositivos.');
                                     } catch (e) {
-                                        Alert.alert('Error', 'No se pudo limpiar el historial.');
+                                        Alert.alert('Error', 'No se pudo limpiar el historial del núcleo.');
                                     }
                                 }}
                             ]);
@@ -1708,11 +1853,11 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
                 </View>
                 
                 <Text style={styles.modalTitle}>
-                    {accountActionType === 'delete' ? 'Purga Definitiva' : 'Reinicio de Sistema'}
+                    {accountActionType === 'delete' ? 'Eliminar Cuenta' : 'Reinicio de Sistema'}
                 </Text>
                 <Text style={styles.modalMsg}>
                     {accountActionType === 'delete' 
-                        ? 'Estás a punto de borrar tu cuenta de raíz de los servidores de Firebase. Esta acción es IRREVERSIBLE y perderás todo tu progreso en Cortex Academy.' 
+                        ? 'Estás a punto de borrar tu cuenta de raíz de los servidores de Cortex. Esta acción es IRREVERSIBLE y perderás todo tu progreso en Cortex Academy.' 
                         : 'Se eliminarán todas tus materias, horarios y tareas, pero conservaremos tu nombre y universidad para que empieces de cero.'
                     }
                 </Text>
@@ -1744,21 +1889,22 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
                 animate={{ opacity: 1, translateY: 0 }}
                 style={{ alignItems: 'center', gap: 20 }}
             >
-                <Brain size={80} color={theme.primary} />
+                {deleteProgressText.includes('exitosamente') ? (
+                    <CheckCircle2 size={80} color="#10B981" />
+                ) : deleteProgressText.includes('Error') || deleteProgressText.includes('re-autenticación') ? (
+                    <AlertTriangle size={80} color="#EF4444" />
+                ) : (
+                    <Brain size={80} color={theme.primary} />
+                )}
                 <Text style={{ fontSize: 24, fontWeight: '900', color: '#FFF', textAlign: 'center' }}>
-                    Fue un honor ser tu copiloto, {name}.
+                    {deleteProgressText.includes('exitosamente') ? 'Proceso Completado' : 'Eliminando Cuenta'}
                 </Text>
                 <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)', textAlign: 'center', paddingHorizontal: 40 }}>
-                    Cortex Academy se está desconectando. Tus datos han sido purgados exitosamente de la red Nexus.
+                    {deleteProgressText}
                 </Text>
-                <View style={{ height: 4, width: 200, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', marginTop: 20 }}>
-                    <MotiView 
-                        from={{ width: 0 }} 
-                        animate={{ width: 200 }} 
-                        transition={{ duration: 3000 }} 
-                        style={{ height: '100%', backgroundColor: theme.primary }} 
-                    />
-                </View>
+                {!deleteProgressText.includes('exitosamente') && !deleteProgressText.includes('Error') && !deleteProgressText.includes('re-autenticación') && (
+                    <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 20 }} />
+                )}
             </MotiView>
           )}
         </View>
@@ -1848,6 +1994,7 @@ export default function SettingsScreen({ navigation, onLogout }: { navigation: a
         visible={showManual} 
         onClose={() => setShowManual(false)} 
       />
+      </KeyboardAvoidingView>
     </CleanBackground>
   );
 }

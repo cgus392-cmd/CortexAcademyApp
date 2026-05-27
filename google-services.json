@@ -30,6 +30,14 @@
           }
         },
         {
+          "client_id": "299757536536-mkkpossgc8t0s1jtrfdh5oehoaa9hvt3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cortex.hubos",
+            "certificate_hash": "5f15bab4fa2773a57af6c0cfac00f18e75d7a081"
+          }
+        },
+        {
           "client_id": "299757536536-rib4p4ui126co33nkt15n4cofpnpo6dt.apps.googleusercontent.com",
           "client_type": 3
         }

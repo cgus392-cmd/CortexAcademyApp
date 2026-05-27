@@ -137,9 +137,9 @@ export default function NotificationCenter({ visible, onClose, onAction }: Notif
                       </Text>
                     </View>
                   ) : (
-                    notifications.map((notif) => (
+                    notifications.map((notif, index) => (
                       <MatteCard
-                        key={notif.id}
+                        key={notif.id || `notif-${index}`}
                         radius={Radius.lg}
                         onPress={() => {
                           markNotificationAsRead(notif.id);

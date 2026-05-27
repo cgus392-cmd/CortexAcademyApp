@@ -56,6 +56,7 @@ export default function GlobalBroadcast() {
                 const alreadyNotified = notifications.some(n => n.id === `announcement_${announcement.id}`);
                 if (!alreadyNotified) {
                     addNotification({
+                        id: `announcement_${announcement.id}`,
                         title: announcement.title,
                         body: announcement.body,
                         type: announcement.type as any || 'info'
@@ -65,7 +66,7 @@ export default function GlobalBroadcast() {
         } else {
             setIsVisible(false);
         }
-    }, [announcement, dismissedIds, notifications, userProfile?.university]);
+    }, [announcement, dismissedIds, userProfile?.university]);
 
     const handleDismiss = async () => {
         if (!announcement?.id) return;

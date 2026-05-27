@@ -3,7 +3,7 @@
     "name": "CortexHub OS",
     "slug": "cortex-hub-os",
     "scheme": "com.cortex.hubos",
-    "version": "3.1.2024",
+    "version": "1.7.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -30,13 +30,14 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.cortex.hubos",
-      "versionCode": 32,
+      "versionCode": 34,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
         "POST_NOTIFICATIONS",
-        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "REQUEST_INSTALL_PACKAGES"
       ]
     },
     "web": {

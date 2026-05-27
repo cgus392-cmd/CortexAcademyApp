@@ -14,7 +14,8 @@ export const MOCK_USER: User = {
   minGrade: 0.0,
   avatarEmoji: '🎓',
   selectedModel: 'flash',
-  aiPersonality: 'friendly',
+  aiProvider: 'gemini',
+  aiPersonality: 'smart',
   accentColor: 'primary',
   preferences: {
     compactMode: false,

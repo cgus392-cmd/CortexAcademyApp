@@ -239,7 +239,7 @@ export default function ChatScreen() {
               </View>
               <TouchableOpacity 
                 style={styles.webCTA}
-                onPress={() => Linking.openURL('https://cortexwebacademy.com')}
+                onPress={() => Linking.openURL('https://cortexweb.org')}
               >
                 <MatteUnderlay radius={16} />
                 <Text style={[styles.webCTAText, { color: theme.primary }]}>Ir a la Web</Text>
