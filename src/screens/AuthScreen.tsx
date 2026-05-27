@@ -20,7 +20,14 @@ import Svg, { Path, Circle, G, Line } from 'react-native-svg';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { Platform } from 'react-native';
+let GoogleSignin: any = { configure: () => {}, hasPlayServices: async () => true, signIn: async () => ({}), signOut: async () => {} };
+let statusCodes: any = {};
+if (Platform.OS !== 'web') {
+  const g = require('@react-native-google-signin/google-signin');
+  GoogleSignin = g.GoogleSignin;
+  statusCodes = g.statusCodes;
+}
 import NetInfo from '@react-native-community/netinfo';
 import { Spacing, Radius } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';

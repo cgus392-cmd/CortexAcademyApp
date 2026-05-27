@@ -15,7 +15,11 @@ import { X, Check, Calendar, StickyNote, BookOpen, Trash2 } from 'lucide-react-n
 // import { BlurView } from 'expo-blur'; // Removing to fix native ViewManager error
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { Platform } from 'react-native';
+let DateTimePicker: any = () => null;
+if (Platform.OS !== 'web') {
+  DateTimePicker = require('@react-native-community/datetimepicker').default;
+}
 import { useTheme } from '../context/ThemeContext';
 import { Radius, Shadows, Spacing } from '../constants/theme';
 import { useData, resolveColor } from '../context/DataContext';
